@@ -99,3 +99,4 @@ Run:
 The objective of Titan-CE is to build a complete chess engine from first principles while understanding every algorithm involved in modern engine development.
 
 Every feature is implemented manually for educational purposes.
+Later it will have GUI to play and learn chess with AI assistant with real time move analyser.
