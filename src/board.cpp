@@ -1,8 +1,10 @@
 #include <random>
-#include "move.h"
-#include "board.h"
 #include <iostream>
 #include <cstdlib>
+#include "move.h"
+#include "board.h"
+#include "pieceSquareTables.h"
+
 
 using namespace std;
 
@@ -801,14 +803,30 @@ int Board::BoardEvaluation()
         {
             switch (board[row][col])
             {
-                case 'P': score += 100; break;
-                case 'N': score += 320; break;
+                case 'P': 
+                score += 100; 
+                score+=PAWN_PST[row][col];
+                break;
+                //------------
+                case 'N': 
+                score += 320; 
+                score+=KNIGHT_PST[row][col];
+                break;
+                //-------------
                 case 'B': score += 330; break;
                 case 'R': score += 500; break;
                 case 'Q': score += 900; break;
-
-                case 'p': score -= 100; break;
-                case 'n': score -= 320; break;
+                //------------
+                case 'p': 
+                score -= 100; 
+                score-=PAWN_PST[7-row][col];
+                break;
+                //------------
+                case 'n': 
+                score -= 320; 
+                score-=KNIGHT_PST[7-row][col];
+                break;
+                //-------------
                 case 'b': score -= 330; break;
                 case 'r': score -= 500; break;
                 case 'q': score -= 900; break;
@@ -877,7 +895,7 @@ int Board::minimax(int depth, int alpha, int beta, bool maximizingPlayer){
         return BoardEvaluation();
     }
 
-    std::vector<Move> legalMoves = generateLegalMoves(!maximizingPlayer);
+    std::vector<Move> legalMoves = generateLegalMoves(maximizingPlayer);
     if (legalMoves.empty())
 {
     return BoardEvaluation();
@@ -998,7 +1016,7 @@ Move Board::findBestMove(int depth, bool whitePlayer)
     for (Move move : legalMoves)
     {
         makeMove(move);
-
+        
         int score = minimax(depth - 1, alpha, beta, !whitePlayer);
         rootMoves.push_back({move, score});
 
