@@ -87,6 +87,7 @@ public:
     void castle();
     void enpassant();
     int BoardEvaluation();
+    bool isSquareAttacked(int row, int col, bool byWhite);
     
 };
 

@@ -650,47 +650,8 @@ return true;
 
     return false;
 }
-bool Board::isKingInCheck(bool whiteKing){
-    int kingRow = -1;
-    int kingCol = -1;
 
-    // Find the king
-    for (int row = 0; row < 8; row++)
-    {
-        for (int col = 0; col < 8; col++)
-        {
-            if ((whiteKing && board[row][col] == 'K') ||
-                (!whiteKing && board[row][col] == 'k'))
-            {
-                kingRow = row;
-                kingCol = col;
-            }
-        }
-    }
 
-    // Check every enemy piece
-    for (int row = 0; row < 8; row++)
-    {
-        for (int col = 0; col < 8; col++)
-        {
-            char piece = board[row][col];
-
-            // Is this an enemy piece?
-            if ((whiteKing && isBlackPiece(piece)) ||
-                (!whiteKing && isWhitePiece(piece)))
-            {
-                Move move(row, col, kingRow, kingCol);
-
-                if (isValidMove(move))
-                {
-                    return true;
-                }
-            }
-        }
-    }
-
-    return false;
-}
 bool Board::isLegalMove(const Move& move){
     if (!isValidMove(move))
     {
@@ -701,8 +662,7 @@ bool Board::isLegalMove(const Move& move){
     char destinationPiece = board[move.toRow][move.toCol];
 
     // Make move temporarily
-    board[move.toRow][move.toCol] = sourcePiece;
-    board[move.fromRow][move.fromCol] = '.';
+    makeMove(move);
 
     bool inCheck;
 
@@ -716,8 +676,7 @@ bool Board::isLegalMove(const Move& move){
     }
 
     // Undo move
-    board[move.fromRow][move.fromCol] = sourcePiece;
-    board[move.toRow][move.toCol] = destinationPiece;
+    undoMove(move);
 
     return !inCheck;
 }
@@ -753,86 +712,83 @@ bool Board::hasLegalMove(bool whitePlayer)
 }
 
 
-bool Board::isCheckmate(bool whiteKing)
-{
-    if (!isKingInCheck(whiteKing))
-        return false;
 
-    if (hasLegalMove(whiteKing))
-        return false;
-
-    return true;
-}
-bool Board::isStalemate(bool whitePlayer){
-    
-    if (isKingInCheck(whitePlayer))
-        return false;
-
-    if (hasLegalMove(whitePlayer))
-        return false;
-
-    return true;
-}
-void Board::pawnPromotion()
-{
-    // White promotion
-    for (int col = 0; col < 8; col++)
-    {
-        if (board[0][col] == 'P')
-        {
-            board[0][col] = 'Q';
-        }
-    }
-
-    // Black promotion
-    for (int col = 0; col < 8; col++)
-    {
-        if (board[7][col] == 'p')
-        {
-            board[7][col] = 'q';
-        }
-    }
-}
 int Board::BoardEvaluation()
 {
     int score = 0;
+    int blackBishops = 0;
+    int whiteBishops = 0;
 
     for (int row = 0; row < 8; row++)
     {
         for (int col = 0; col < 8; col++)
         {
+            
+            
+
             switch (board[row][col])
             {
                 case 'P': 
                 score += 100; 
-                score+=PAWN_PST[row][col];
+                score +=PAWN_PST[row][col];
                 break;
                 //------------
                 case 'N': 
                 score += 320; 
-                score+=KNIGHT_PST[row][col];
+                score +=KNIGHT_PST[row][col];
                 break;
                 //-------------
-                case 'B': score += 330; break;
-                case 'R': score += 500; break;
-                case 'Q': score += 900; break;
+                case 'B': 
+                whiteBishops++;
+                score += 330; 
+                score +=BISHOP_PST[row][col];
+                break;
+                case 'R': 
+                score += 500; 
+                score += ROOK_PST[row][col];
+                break;
+                case 'Q': 
+                score += 900; 
+                score += QUEEN_PST[row][col];
+                break;
+                case 'K':
+                score += KING_PST[row][col];
+                break;
                 //------------
                 case 'p': 
                 score -= 100; 
-                score-=PAWN_PST[7-row][col];
+                score -=PAWN_PST[7-row][col];
                 break;
                 //------------
                 case 'n': 
                 score -= 320; 
-                score-=KNIGHT_PST[7-row][col];
+                score -=KNIGHT_PST[7-row][col];
                 break;
                 //-------------
-                case 'b': score -= 330; break;
-                case 'r': score -= 500; break;
-                case 'q': score -= 900; break;
+                case 'b': 
+                blackBishops++;
+                score -= 330; 
+                score -=BISHOP_PST[7-row][col];
+                break;
+                case 'r': 
+                score -= 500; 
+                score -= ROOK_PST[7-row][col];
+                break;
+                case 'q': 
+                score -= 900; 
+                score -= QUEEN_PST[7-row][col];
+                break;
+                case 'k':
+                score -= KING_PST[7-row][col];
+                break;
             }
         }
     }
+    if (whiteBishops >= 2)
+    score += 30;
+
+    if (blackBishops >= 2)
+    score -= 30;
 
     return score;
 }
@@ -1041,29 +997,7 @@ Move Board::findBestMove(int depth, bool whitePlayer)
             }
         }
     }
-     cout << "\n========== ROOT ANALYSIS ==========\n";
-
-for (const RootMove& rm : rootMoves)
-{
-    cout
-        << char('a' + rm.move.fromCol)
-        << 8 - rm.move.fromRow
-        << " -> "
-        << char('a' + rm.move.toCol)
-        << 8 - rm.move.toRow
-        << "    Score: "
-        << rm.score
-        << endl;
-}
-cout << "\nBest Move : "
-     << char('a' + bestMove.fromCol)
-     << 8 - bestMove.fromRow
-     << " -> "
-     << char('a' + bestMove.toCol)
-     << 8 - bestMove.toRow
-     << endl;
-
-cout << "Best Score: " << bestScore << endl;
+     
         
     return bestMove;
 }
@@ -1139,11 +1073,11 @@ void Board::debugSearch(const Move& move,
                         int score,
                         const std::string& action)
 {
-    cout << "------------------------------------------\n";
+    
 
-    cout << "Depth  : " << depth << endl;
+    
 
-    cout << "Move   : "
+    cout << " "
          << char('a' + move.fromCol)
          << 8 - move.fromRow
          << " -> "
@@ -1151,9 +1085,208 @@ void Board::debugSearch(const Move& move,
          << 8 - move.toRow
          << endl;
 
-    cout << "Score  : " << score << endl;
+   
 
-    cout << "Action : " << action << endl;
+    
+}
+bool Board::isKingInCheck(bool whiteKing)
+{
+    char king = whiteKing ? 'K' : 'k';
 
-    cout << "------------------------------------------\n";
+    int kingRow = -1;
+    int kingCol = -1;
+
+    // Find the king
+    for (int row = 0; row < 8; row++)
+    {
+        for (int col = 0; col < 8; col++)
+        {
+            if (board[row][col] == king)
+            {
+                kingRow = row;
+                kingCol = col;
+                break;
+            }
+        }
+    }
+         return isSquareAttacked(kingRow, kingCol, !whiteKing);
+}
+
+
+bool Board::isSquareAttacked(int row, int col, bool byWhite){
+    if (byWhite)
+{
+    if (row > 0)
+    {
+        if (col > 0 && board[row - 1][col - 1] == 'P')
+            return true;
+
+        if (col < 7 && board[row - 1][col + 1] == 'P')
+            return true;
+    }
+}
+else
+{
+    if (row < 7)
+    {
+        if (col > 0 && board[row + 1][col - 1] == 'p')
+            return true;
+
+        if (col < 7 && board[row + 1][col + 1] == 'p')
+            return true;
+    }
+}
+const int knightMoves[8][2] =
+{
+    {-2,-1},
+    {-2, 1},
+    {-1,-2},
+    {-1, 2},
+    { 1,-2},
+    { 1, 2},
+    { 2,-1},
+    { 2, 1}
+};
+
+for (int i = 0; i < 8; i++)
+{
+    int r = row + knightMoves[i][0];
+    int c = col + knightMoves[i][1];
+
+    if (r < 0 || r > 7 || c < 0 || c > 7)
+        continue;
+
+    if (byWhite)
+    {
+        if (board[r][c] == 'N')
+            return true;
+    }
+    else
+    {
+        if (board[r][c] == 'n')
+            return true;
+    }
+}
+// Bishop directions
+const int bishopDirections[4][2] =
+{
+    {-1,-1},
+    {-1, 1},
+    { 1,-1},
+    { 1, 1}
+};
+
+for (int d = 0; d < 4; d++)
+{
+    int r = row + bishopDirections[d][0];
+    int c = col + bishopDirections[d][1];
+
+    while (r >= 0 && r < 8 && c >= 0 && c < 8)
+    {
+        if (board[r][c] != '.')
+        {
+            if (byWhite)
+            {
+                if (board[r][c] == 'B' || board[r][c] == 'Q')
+                    return true;
+            }
+            else
+            {
+                if (board[r][c] == 'b' || board[r][c] == 'q')
+                    return true;
+            }
+
+            break;      // blocked by any piece
+        }
+
+        r += bishopDirections[d][0];
+        c += bishopDirections[d][1];
+    }
+}
+// Rook directions
+const int rookDirections[4][2] =
+{
+    {-1, 0}, // Up
+    { 1, 0}, // Down
+    { 0,-1}, // Left
+    { 0, 1}  // Right
+};
+
+for (int d = 0; d < 4; d++)
+{
+    int r = row + rookDirections[d][0];
+    int c = col + rookDirections[d][1];
+
+    while (r >= 0 && r < 8 && c >= 0 && c < 8)
+    {
+        if (board[r][c] != '.')
+        {
+            if (byWhite)
+            {
+                if (board[r][c] == 'R' || board[r][c] == 'Q')
+                    return true;
+            }
+            else
+            {
+                if (board[r][c] == 'r' || board[r][c] == 'q')
+                    return true;
+            }
+
+            break;      // blocked
+        }
+
+        r += rookDirections[d][0];
+        c += rookDirections[d][1];
+    }
+}
+// King attacks
+const int kingMoves[8][2] =
+{
+    {-1,-1},
+    {-1, 0},
+    {-1, 1},
+    { 0,-1},
+    { 0, 1},
+    { 1,-1},
+    { 1, 0},
+    { 1, 1}
+};
+
+for (int i = 0; i < 8; i++)
+{
+    int r = row + kingMoves[i][0];
+    int c = col + kingMoves[i][1];
+
+    if (r < 0 || r > 7 || c < 0 || c > 7)
+        continue;
+
+    if (byWhite)
+    {
+        if (board[r][c] == 'K')
+            return true;
+    }
+    else
+    {
+        if (board[r][c] == 'k')
+            return true;
+    }
+}
+
+return false;
+}
+
+    bool Board::isCheckmate(bool whitePlayer)
+{
+    return isKingInCheck(whitePlayer) &&
+           !hasLegalMove(whitePlayer);
+}
+
+bool Board::isStalemate(bool whitePlayer)
+{
+    return !isKingInCheck(whitePlayer) &&
+           !hasLegalMove(whitePlayer);
+}
+void Board::pawnPromotion()
+{
+    // Temporary placeholder
 }
