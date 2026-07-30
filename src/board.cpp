@@ -26,6 +26,7 @@ Board::Board()
 
 void Board::makeMove(const Move& move)
 {
+    
     char piece = board[move.fromRow][move.fromCol];
 
     // Save the current state for undo
@@ -44,8 +45,6 @@ undo.whiteRightRookMoved = whiteRightRookMoved;
 
 undo.blackLeftRookMoved = blackLeftRookMoved;
 undo.blackRightRookMoved = blackRightRookMoved;
-
-history.push_back(undo);
 
     //--------------------------------
 
@@ -92,7 +91,7 @@ history.push_back(undo);
         {
             // White kingside
             if (piece == 'K' &&
-                move.fromRow == 7 &&
+                move.fromRow == 7 && //here user input move for king where to row and col is 7,6
                 move.fromCol == 4 &&
                 move.toCol == 6)
             {
@@ -135,9 +134,15 @@ history.push_back(undo);
     // Move the piece
     board[move.toRow][move.toCol] = piece;
     board[move.fromRow][move.fromCol] = '.';
+    
 
     // Handle pawn promotion
     pawnPromotion();
+
+    undo.previousLastMove = lastMove;
+
+    history.push_back(undo);
+
     lastMove = move;
 }
 
@@ -663,6 +668,7 @@ bool Board::isLegalMove(const Move& move){
 
     // Make move temporarily
     makeMove(move);
+    
 
     bool inCheck;
 
@@ -677,6 +683,7 @@ bool Board::isLegalMove(const Move& move){
 
     // Undo move
     undoMove(move);
+    
 
     return !inCheck;
 }
@@ -863,7 +870,8 @@ int bestScore = -1000000;
 
 for (Move move : legalMoves)
 {
-    makeMove(move);
+    
+   makeMove(move);
 
     int score = minimax(depth - 1, alpha, beta, !maximizingPlayer);
 
@@ -898,11 +906,14 @@ int bestScore = 1000000;
 
 for (Move move : legalMoves)
 {
+
     makeMove(move);
+    
 
     int score = minimax(depth - 1, alpha, beta, !maximizingPlayer);
 
     undoMove(move);
+    
 
     if (score < bestScore)
     {
@@ -934,9 +945,50 @@ return bestScore;
 
 void Board::undoMove(const Move& move)
 {
-   UndoInfo undo = history.back();
-    history.pop_back();
+    UndoInfo undo = history.back();
 
+    // Undo castling rook move
+    if ((undo.movedPiece == 'K' || undo.movedPiece == 'k') &&
+        abs(undo.move.toCol - undo.move.fromCol) == 2)
+    {
+        // White kingside
+        if (undo.movedPiece == 'K' &&
+            undo.move.fromRow == 7 &&
+            undo.move.toCol == 6)
+        {
+            board[7][7] = board[7][5];
+            board[7][5] = '.';
+        }
+
+        // White queenside
+        else if (undo.movedPiece == 'K' &&
+                 undo.move.fromRow == 7 &&
+                 undo.move.toCol == 2)
+        {
+            board[7][0] = board[7][3];
+            board[7][3] = '.';
+        }
+
+        // Black kingside
+        else if (undo.movedPiece == 'k' &&
+                 undo.move.fromRow == 0 &&
+                 undo.move.toCol == 6)
+        {
+            board[0][7] = board[0][5];
+            board[0][5] = '.';
+        }
+
+        // Black queenside
+        else if (undo.movedPiece == 'k' &&
+                 undo.move.fromRow == 0 &&
+                 undo.move.toCol == 2)
+        {
+            board[0][0] = board[0][3];
+            board[0][3] = '.';
+        }
+    }
+
+    // Existing code
     board[undo.move.fromRow][undo.move.fromCol] = undo.movedPiece;
     board[undo.move.toRow][undo.move.toCol] = undo.capturedPiece;
 
@@ -948,8 +1000,10 @@ void Board::undoMove(const Move& move)
 
     blackLeftRookMoved = undo.blackLeftRookMoved;
     blackRightRookMoved = undo.blackRightRookMoved;
-}
 
+    history.pop_back();
+    lastMove = undo.previousLastMove;
+}
 Move Board::findBestMove(int depth, bool whitePlayer)
 {
     std::vector<Move> legalMoves = generateLegalMoves(whitePlayer);
@@ -1289,4 +1343,30 @@ bool Board::isStalemate(bool whitePlayer)
 void Board::pawnPromotion()
 {
     // Temporary placeholder
+}
+void Board::verifyBoard()
+{
+    int whiteRooks = 0;
+    int blackRooks = 0;
+
+    for (int r = 0; r < 8; r++)
+    {
+        for (int c = 0; c < 8; c++)
+        {
+            if (board[r][c] == 'R')
+                whiteRooks++;
+
+            if (board[r][c] == 'r')
+                blackRooks++;
+        }
+    }
+
+    if (whiteRooks != 2 || blackRooks != 2)
+    {
+        cout << "\n===== BOARD CORRUPTED =====\n";
+        cout << "White rooks : " << whiteRooks << endl;
+        cout << "Black rooks : " << blackRooks << endl;
+        display();
+        system("pause");
+    }
 }

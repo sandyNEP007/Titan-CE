@@ -14,6 +14,7 @@ struct RootMove
 struct UndoInfo
 {
     Move move;
+    Move previousLastMove;
 
     char movedPiece;
 
@@ -88,7 +89,7 @@ public:
     void enpassant();
     int BoardEvaluation();
     bool isSquareAttacked(int row, int col, bool byWhite);
-    
+    void verifyBoard();
 };
 
 #endif
