@@ -1,3 +1,4 @@
+#include <fstream>
 #include "uci.h"
 
 #include <iostream>
@@ -17,6 +18,10 @@ void UCI::loop()
 
 void UCI::handleCommand(const string& command)
 {
+    std::ofstream log("uci_log.txt", std::ios::app);
+log << command << std::endl;
+log.close();
+    std::cerr << "UCI >> " << command << std::endl;
     if (command == "uci")
     {
         cout << "id name Titan" << endl;
@@ -28,6 +33,10 @@ void UCI::handleCommand(const string& command)
     {
         cout << "readyok" << endl;
     }
+    else if (command.rfind("setoption",0)==0)
+{
+    return;
+}
     else if (command == "ucinewgame")
 {
     board = Board();
@@ -37,15 +46,15 @@ else if (command.rfind("position", 0) == 0)
 {
     position(command);
 }
-
-else if (command == "go")
-{
-    go();
-}
 else if(command == "quit")
 {
     exit(0);
 }
+else if (command.rfind("go", 0) == 0)
+{
+    go();
+}
+
 }
 Move UCI::parseMove(const std::string& moveString)
 {
@@ -70,31 +79,32 @@ std::string UCI::moveToString(const Move& move)
 
     return s;
 }
-
-void UCI::position(const std::string& command)
+void UCI :: position(const std::string& command){
+if (command.find("position fen") == 0)
 {
-    board = Board();
+    board.setupPieces();
     whiteToMove = true;
 
-    std::stringstream ss(command);
+    size_t movesPos = command.find("moves");
 
-    std::string token;
-
-    ss >> token;          // position
-    ss >> token;          // startpos
-
-    if (!(ss >> token))
-        return;
-
-    if (token != "moves")
-        return;
-
-    while (ss >> token)
+    if (movesPos != std::string::npos)
     {
-        Move move = parseMove(token);
-        board.makeMove(move);
-        whiteToMove = !whiteToMove;
+        std::stringstream ss(command.substr(movesPos + 6));
+
+        std::string moveStr;
+
+        while (ss >> moveStr)
+        {
+            Move move = parseMove(moveStr);
+
+            board.makeMove(move);
+
+            whiteToMove = !whiteToMove;
+        }
     }
+
+    return;
+}
 }
 void UCI::go()
 {
