@@ -1,6 +1,6 @@
 #include <fstream>
 #include "uci.h"
-
+#include "search.h"
 #include <iostream>
 #include <sstream>
 
@@ -18,9 +18,7 @@ void UCI::loop()
 
 void UCI::handleCommand(const string& command)
 {
-    std::ofstream log("uci_log.txt", std::ios::app);
-log << command << std::endl;
-log.close();
+    
     std::cerr << "UCI >> " << command << std::endl;
     if (command == "uci")
     {
@@ -108,7 +106,12 @@ if (command.find("position fen") == 0)
 }
 void UCI::go()
 {
-    Move bestMove = board.findBestMove(3, whiteToMove);
+    Search engine(board);
+
+    int depth = 6;      // temporary
+
+    Move bestMove =
+        engine.findBestMove(depth, whiteToMove);
 
     std::cout << "bestmove "
               << moveToString(bestMove)

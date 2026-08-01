@@ -1,6 +1,7 @@
 #include <random>
 #include <iostream>
 #include <cstdlib>
+#include <algorithm>
 #include "move.h"
 #include "board.h"
 #include "pieceSquareTables.h"
@@ -29,7 +30,7 @@ void Board::makeMove(const Move& move)
     
     char piece = board[move.fromRow][move.fromCol];
 
-    // Save the current state for undo
+    
 UndoInfo undo;
 
 undo.move = move;
@@ -844,103 +845,6 @@ std::vector<Move> Board::generateLegalMoves(bool whitePlayer)
 }
 
 
-int Board::minimax(int depth, int alpha, int beta, bool maximizingPlayer){
-    uint64_t hash = generateHash();
-    auto it = transpositionTable.find(hash);
-    if (it != transpositionTable.end() &&
-    it->second.depth >= depth)
-{
-    
-    return it->second.evaluation;
-}
-    if (depth == 0)
-    {
-        return BoardEvaluation();
-    }
-
-    std::vector<Move> legalMoves = generateLegalMoves(maximizingPlayer);
-    if (legalMoves.empty())
-{
-    return BoardEvaluation();
-}
-
-if (maximizingPlayer)
-{
-int bestScore = -1000000;
-
-for (Move move : legalMoves)
-{
-    
-   makeMove(move);
-
-    int score = minimax(depth - 1, alpha, beta, !maximizingPlayer);
-
-    undoMove(move);
-
-    if (score > bestScore)
-    {
-        bestScore = score;
-        
-    }
-    alpha = std::max(alpha, bestScore);
-    if (alpha >= beta)
-{
-    break;
-}
-}
-TTEntry entry;
-
-entry.hash = hash;
-entry.evaluation = bestScore;
-entry.depth = depth;
-entry.bestMove = Move();
-
-transpositionTable[hash] = entry;
-
-
-return bestScore;
-}
-else
-{
-int bestScore = 1000000;
-
-for (Move move : legalMoves)
-{
-
-    makeMove(move);
-    
-
-    int score = minimax(depth - 1, alpha, beta, !maximizingPlayer);
-
-    undoMove(move);
-    
-
-    if (score < bestScore)
-    {
-        bestScore = score;
-        
-    }
-    beta = std::min(beta, bestScore);
-
-if (alpha >= beta)
-{
-    break;
-}
-}
-TTEntry entry;
-
-entry.hash = hash;
-entry.evaluation = bestScore;
-entry.depth = depth;
-entry.bestMove = Move();
-
-transpositionTable[hash] = entry;
-
-     
-return bestScore;
-}
-
-}
 
 
 void Board::undoMove(const Move& move)
@@ -1004,57 +908,7 @@ void Board::undoMove(const Move& move)
     history.pop_back();
     lastMove = undo.previousLastMove;
 }
-Move Board::findBestMove(int depth, bool whitePlayer)
-{
-    std::vector<Move> legalMoves = generateLegalMoves(whitePlayer);
 
-    Move bestMove = legalMoves[0];
-     int alpha=-1000000;
-     int beta=1000000;
-
-    int bestScore;
-
-    if (whitePlayer)
-    {
-        bestScore = -1000000;
-    }
-    else
-    {
-        bestScore = 1000000;
-    }
-    std::vector<RootMove> rootMoves;
-    for (Move move : legalMoves)
-    {
-        makeMove(move);
-        
-        int score = minimax(depth - 1, alpha, beta, !whitePlayer);
-        rootMoves.push_back({move, score});
-
-        undoMove(move);
-       
-
-        if (whitePlayer)
-        {
-            if (score > bestScore)
-            {
-                bestScore = score;
-                bestMove = move;
-            }
-            
-        }
-        else
-        {
-            if (score < bestScore)
-            {
-                bestScore = score;
-                bestMove = move;
-            }
-        }
-    }
-     
-        
-    return bestMove;
-}
 void Board::initializeZobristTable()
 {
     std::mt19937_64 rng(2026);
@@ -1344,29 +1198,31 @@ void Board::pawnPromotion()
 {
     // Temporary placeholder
 }
-void Board::verifyBoard()
-{
-    int whiteRooks = 0;
-    int blackRooks = 0;
 
-    for (int r = 0; r < 8; r++)
+int Board :: moveScore(const Move& move){
+ int score = 0;
+
+    char attacker = board[move.fromRow][move.fromCol];
+    char victim   = board[move.toRow][move.toCol];
+    
+
+    switch (victim)
     {
-        for (int c = 0; c < 8; c++)
-        {
-            if (board[r][c] == 'R')
-                whiteRooks++;
+        case 'Q':
+        case 'q': score += 900; break;
 
-            if (board[r][c] == 'r')
-                blackRooks++;
-        }
+        case 'R':
+        case 'r': score += 500; break;
+
+        case 'B':
+        case 'b':
+        case 'N':
+        case 'n': score += 300; break;
+
+        case 'P':
+        case 'p': score += 100; break;
     }
 
-    if (whiteRooks != 2 || blackRooks != 2)
-    {
-        cout << "\n===== BOARD CORRUPTED =====\n";
-        cout << "White rooks : " << whiteRooks << endl;
-        cout << "Black rooks : " << blackRooks << endl;
-        display();
-        system("pause");
-    }
+    return score;
+
 }

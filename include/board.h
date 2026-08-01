@@ -6,11 +6,10 @@
 #include <string>
 #include "move.h"
 #include "transposition.h"
-struct RootMove
-{
-    Move move;
-    int score;
-};
+
+
+
+
 struct UndoInfo
 {
     Move move;
@@ -33,14 +32,13 @@ struct UndoInfo
 
 class Board
 {
-    private:
+private:
     char board[8][8];
-    
     Move lastMove;
     std::vector<UndoInfo> history;
     uint64_t zobristTable[12][64];
     uint64_t currentHash;
-    std::unordered_map<uint64_t, TTEntry> transpositionTable;
+    
    
 public:
     Board();
@@ -88,8 +86,9 @@ public:
     void castle();
     void enpassant();
     int BoardEvaluation();
+    int moveScore(const Move& move);
     bool isSquareAttacked(int row, int col, bool byWhite);
-    void verifyBoard();
+    
 };
 
 #endif
