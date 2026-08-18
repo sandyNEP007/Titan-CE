@@ -1,24 +1,15 @@
 #ifndef BOARD_H
 #define BOARD_H
-#include <unordered_map>
+#include<vector>
 #include <cstdint>
-#include <vector>
-#include <string>
 #include "move.h"
-#include "transposition.h"
-
-
-
-
 struct UndoInfo
 {
     Move move;
-    Move previousLastMove;
+    Move previouslastMove;
 
     char movedPiece;
-
     char capturedPiece;
-
     bool whiteKingMoved;
     bool blackKingMoved;
 
@@ -27,50 +18,24 @@ struct UndoInfo
 
     bool blackLeftRookMoved;
     bool blackRightRookMoved;
+
+    bool wasCastling;
+    bool previousWhiteTurn;
+    uint64_t previousZobristHash;
+
+    bool wasEnPassant;
+    char enPassantCapturedPiece;
+    int enPassantCapturedRow;
+    int enPassantCapturedCol;
+       
 };
 
-
-class Board
-{
+class Board{
 private:
     char board[8][8];
     Move lastMove;
     std::vector<UndoInfo> history;
-    uint64_t zobristTable[12][64];
-    uint64_t currentHash;
-    
-   
-public:
-    Board();
-    void debugSearch(
-        const Move& move,
-        int depth,
-        int score,
-        const std::string& action
-    );
-    void initializeZobristTable();
-    uint64_t generateHash();
-    int pieceToIndex(char piece);
-    std::vector<Move> generateLegalMoves(bool whitePlayer);
-    int minimax(int depth, int alpha, int beta, bool maximizingPlayer);
-    Move findBestMove(int depth, bool whitePlayer);
-    void makeMove(const Move& move);
-    bool isValidMove(const Move& move);
-    void undoMove(const Move& move);
-    void initialize();
-    void display();
-    void setupPieces();
-    bool isWhitePiece(char piece);
-    bool isBlackPiece(char piece);
-    bool isValidPawnMove(const Move& move);
-    bool isValidKnightMove(const Move& move);
-    bool isValidBishopMove(const Move& move);
-    bool isValidRookMove(const Move& move);
-    bool isValidQueenMove(const Move& move);
-    bool isValidKingMove(const Move& move);
-    bool isKingInCheck(bool whiteKing);
-    bool isLegalMove(const Move& move);
-    bool hasLegalMove(bool whitePlayer);
+    uint64_t zobristHash;
     bool whiteKingMoved;
     bool blackKingMoved;
 
@@ -79,16 +44,43 @@ public:
 
     bool blackLeftRookMoved;
     bool blackRightRookMoved;
-
-    bool isCheckmate(bool whiteKing);
-    bool isStalemate(bool whitePlayer);
-    void pawnPromotion();
-    void castle();
-    void enpassant();
-    int BoardEvaluation();
-    int moveScore(const Move& move);
-    bool isSquareAttacked(int row, int col, bool byWhite);
     
-};
 
+public:
+    Board();
+    char getPiece(int row, int col) const;
+    void BoardInitialize();
+    void setPieces();
+    void display();
+    bool isWhiteTurn() const
+{
+    return whiteTurn;
+}
+    bool whiteTurn;
+    bool isWhitePiece(char piece);
+    bool isBlackPiece(char piece);
+    bool isValidMove(const Move& move);
+    bool isValidPawnMove(const Move& move);
+    bool isValidBishopMove(const Move& move);
+    bool isValidKnightMove(const Move& move);
+    bool isValidRookMove(const Move& move);
+    bool isValidQueenMove(const Move& move);
+    bool isValidKingMove(const Move& move);
+    bool isValidCastle(const Move& move);
+    bool isKingInCheck(bool white);
+    bool isSquareAttacked(int row, int col, bool byWhite);
+    bool hasLegalMove(bool white);
+    bool isCheckmate(bool white);
+    bool isStalemate(bool white);
+    void makeMove(const Move& move);
+    void undoMove();
+    void setPiece(int row, int col, char piece);
+    bool canWhiteKingSideCastle() const;
+    bool canWhiteQueenSideCastle() const;
+    bool canBlackKingSideCastle() const;
+    bool canBlackQueenSideCastle() const;
+    int getEnPassantSquare() const;
+    uint64_t getZobristHash() const;
+   
+};
 #endif

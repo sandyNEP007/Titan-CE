@@ -1,20 +1,28 @@
-#include <random>
-#include <iostream>
-#include <cstdlib>
-#include <algorithm>
-#include "move.h"
+#include<iostream>
+#include<string>
 #include "board.h"
-#include "pieceSquareTables.h"
-
-
+#include "zobrist.h"
+#include "move.h"
+#include <cstdlib>
 using namespace std;
 
-Board::Board()
+ static void removePieceHash(uint64_t& hash, char piece, int row, int col)
 {
-    initialize();
-    setupPieces();
-    initializeZobristTable();
-    currentHash = generateHash();
+    if (piece == '.')
+        return;
+
+    int square = row * 8 + col;
+
+    hash ^= Zobrist::getPieceKey(piece, square);
+}
+
+
+Board :: Board(){    
+    Zobrist::initialize();
+    BoardInitialize();
+    setPieces();
+    whiteTurn = true;
+
     whiteKingMoved = false;
     blackKingMoved = false;
 
@@ -23,240 +31,321 @@ Board::Board()
 
     blackLeftRookMoved = false;
     blackRightRookMoved = false;
+    zobristHash = Zobrist::generateHash(*this);
+    
 }
 
-void Board::makeMove(const Move& move)
+//Initializaton of chess Board
+void Board :: BoardInitialize()
 {
-    
-    char piece = board[move.fromRow][move.fromCol];
-
-    
-UndoInfo undo;
-
-undo.move = move;
-
-undo.movedPiece = board[move.fromRow][move.fromCol];
-undo.capturedPiece = board[move.toRow][move.toCol];
-
-undo.whiteKingMoved = whiteKingMoved;
-undo.blackKingMoved = blackKingMoved;
-
-undo.whiteLeftRookMoved = whiteLeftRookMoved;
-undo.whiteRightRookMoved = whiteRightRookMoved;
-
-undo.blackLeftRookMoved = blackLeftRookMoved;
-undo.blackRightRookMoved = blackRightRookMoved;
-
-    //--------------------------------
-
-    // Update king movement flags
-    if (piece == 'K')
-        whiteKingMoved = true;
-
-    if (piece == 'k')
-        blackKingMoved = true;
-
-    // Update rook movement flags
-    if (piece == 'R' &&
-        move.fromRow == 7 &&
-        move.fromCol == 0)
-    {
-        whiteLeftRookMoved = true;
-    }
-
-    if (piece == 'R' &&
-        move.fromRow == 7 &&
-        move.fromCol == 7)
-    {
-        whiteRightRookMoved = true;
-    }
-
-    if (piece == 'r' &&
-        move.fromRow == 0 &&
-        move.fromCol == 0)
-    {
-        blackLeftRookMoved = true;
-    }
-
-    if (piece == 'r' &&
-        move.fromRow == 0 &&
-        move.fromCol == 7)
-    {
-        blackRightRookMoved = true;
-    }
-
-    // Castling: move the rook
-    if (piece == 'K' || piece == 'k')
-    {
-        if (abs(move.toCol - move.fromCol) == 2)
-        {
-            // White kingside
-            if (piece == 'K' &&
-                move.fromRow == 7 && //here user input move for king where to row and col is 7,6
-                move.fromCol == 4 &&
-                move.toCol == 6)
-            {
-                board[7][5] = board[7][7];
-                board[7][7] = '.';
-            }
-
-            // White queenside
-            if (piece == 'K' &&
-                move.fromRow == 7 &&
-                move.fromCol == 4 &&
-                move.toCol == 2)
-            {
-                board[7][3] = board[7][0];
-                board[7][0] = '.';
-            }
-
-            // Black kingside
-            if (piece == 'k' &&
-                move.fromRow == 0 &&
-                move.fromCol == 4 &&
-                move.toCol == 6)
-            {
-                board[0][5] = board[0][7];
-                board[0][7] = '.';
-            }
-
-            // Black queenside
-            if (piece == 'k' &&
-                move.fromRow == 0 &&
-                move.fromCol == 4 &&
-                move.toCol == 2)
-            {
-                board[0][3] = board[0][0];
-                board[0][0] = '.';
-            }
+    for(int i=0; i<8; i++){
+        for(int j =0; j<8; j++){
+            board[i][j] = '.';
         }
     }
 
-    // Move the piece
-    board[move.toRow][move.toCol] = piece;
-    board[move.fromRow][move.fromCol] = '.';
-    
-
-    // Handle pawn promotion
-    pawnPromotion();
-
-    undo.previousLastMove = lastMove;
-
-    history.push_back(undo);
-
-    lastMove = move;
 }
 
-bool Board::isWhitePiece(char piece)
+//Setting pieces on board
+void Board :: setPieces(){
+    //Setting white pieces on 2nd rank
+    for(int i=0; i<8; i++){
+        board[6][i] = 'P';
+    }
+    //Setting black pieces on 7th rank
+    for(int i=0; i<8; i++){
+        board[1][i] = 'p';
+    }
+    //for all White pieces
+    board[7][0] = 'R';
+    board[7][1] = 'N';
+    board[7][2] = 'B';
+    board[7][3] = 'Q';
+    board[7][4] = 'K';
+    board[7][5] = 'B';
+    board[7][6] = 'N';
+    board[7][7] = 'R';
+    //for all Black pieces
+    board[0][0] = 'r';
+    board[0][1] = 'n';
+    board[0][2] = 'b';
+    board[0][3] = 'q';
+    board[0][4] = 'k';
+    board[0][5] = 'b';
+    board[0][6] = 'n';
+    board[0][7] = 'r';
+}
+
+//Diaplaying board
+void Board :: display(){
+      for(int i=0; i<8; i++){
+        for(int j=0; j<8; j++){
+            cout<<board[i][j]<<" ";
+        }
+        cout<<endl;
+    }
+   cout<<"a b c d e f g h"<<endl;
+}
+
+//Checking if the piece is white or black
+bool Board :: isWhitePiece(char piece)
 {
     return piece >= 'A' && piece <= 'Z';
 }
-
-bool Board::isBlackPiece(char piece)
+bool Board :: isBlackPiece(char piece)
 {
-    return piece >= 'a' && piece <= 'z';
+     return piece >= 'a' && piece <= 'z';
 }
 
-void Board::initialize()
-{
-    for (int row = 0; row < 8; row++)
-    {
-        for (int col = 0; col < 8; col++)
-        {
-            board[row][col] = '.';
-        }
-    }
-}
-
-void Board::display()
-{
-    cout << "  a b c d e f g h" << endl;
-
-    for (int row = 0; row < 8; row++)
-    {
-        cout << 8 - row << " ";
-
-        for (int col = 0; col < 8; col++)
-        {
-            cout << board[row][col] << " ";
-        }
-
-        cout << endl;
-    }
-}
-
-void Board::setupPieces()
-{
-    board[0][0]='r';
-    board[0][1]='n';
-    board[0][2]='b';
-    board[0][3]='q';
-    board[0][4]='k';
-    board[0][5]='b';
-    board[0][6]='n';
-    board[0][7]='r';
-
-    for(int col=0; col<8; col++)
-        board[1][col]='p';
-
-    for(int col=0; col<8; col++)
-        board[6][col]='P';
-
-    board[7][0]='R';
-    board[7][1]='N';
-    board[7][2]='B';
-    board[7][3]='Q';
-    board[7][4]='K';
-    board[7][5]='B';
-    board[7][6]='N';
-    board[7][7]='R';
-}
-
+//Validating move
 bool Board::isValidMove(const Move& move)
 {
-    if (move.fromRow < 0 || move.fromRow > 7 ||
-        move.fromCol < 0 || move.fromCol > 7)
-        return false;
 
-    if (move.toRow < 0 || move.toRow > 7 ||
+    //Check coordinates
+    if (move.fromRow < 0 || move.fromRow > 7 ||
+        move.fromCol < 0 || move.fromCol > 7 ||
+        move.toRow < 0 || move.toRow > 7 ||
         move.toCol < 0 || move.toCol > 7)
+    {
         return false;
+    }
 
     if (move.fromRow == move.toRow &&
         move.fromCol == move.toCol)
+    {
         return false;
-
-    if (board[move.fromRow][move.fromCol] == '.')
-        return false;
+    }
 
     char sourcePiece = board[move.fromRow][move.fromCol];
     char destinationPiece = board[move.toRow][move.toCol];
-
-    if (isWhitePiece(sourcePiece) && isWhitePiece(destinationPiece))
+    bool movingWhite = isWhitePiece(sourcePiece);
+       
+    if (sourcePiece == '.')
+    {
         return false;
+    }
 
-    if (isBlackPiece(sourcePiece) && isBlackPiece(destinationPiece))
+    //Cannot capture your own piece
+    if (isWhitePiece(sourcePiece) &&
+        isWhitePiece(destinationPiece))
+    {
         return false;
+    }
+
+    if (isBlackPiece(sourcePiece) &&
+        isBlackPiece(destinationPiece))
+    {
+        return false;
+    }
+
+    bool pieceMoveValid = false;
 
     if (sourcePiece == 'P' || sourcePiece == 'p')
-        return isValidPawnMove(move);
+        pieceMoveValid = isValidPawnMove(move);
 
-    if (sourcePiece == 'N' || sourcePiece == 'n')
-        return isValidKnightMove(move);
-        
-    if (sourcePiece == 'B' || sourcePiece == 'b')
-        return isValidBishopMove(move);
+    else if (sourcePiece == 'N' || sourcePiece == 'n')
+        pieceMoveValid = isValidKnightMove(move);
 
-    if (sourcePiece == 'R' || sourcePiece == 'r')
-        return isValidRookMove(move);
+    else if (sourcePiece == 'B' || sourcePiece == 'b')
+        pieceMoveValid = isValidBishopMove(move);
 
-    if (sourcePiece == 'Q' || sourcePiece == 'q')
-        return isValidQueenMove(move);
+    else if (sourcePiece == 'R' || sourcePiece == 'r')
+        pieceMoveValid = isValidRookMove(move);
 
-    if (sourcePiece == 'K' || sourcePiece == 'k')
-        return isValidKingMove(move);
+    else if (sourcePiece == 'Q' || sourcePiece == 'q')
+        pieceMoveValid = isValidQueenMove(move);
 
+    else if (sourcePiece == 'K' || sourcePiece == 'k')
+{
+
+    // Castling attempt: king moves exactly two files
+    if (move.fromRow == move.toRow &&
+        abs(move.toCol - move.fromCol) == 2)
+    {
+        pieceMoveValid = isValidCastle(move);
+    }
+    else
+    {
+        pieceMoveValid = isValidKingMove(move);
+    }
+}
+
+    else
+        return false;
+
+    //Piece cannot move that way
+    if (!pieceMoveValid)
+    {
+        return false;
+    }
+
+    // Temporarily make the move
+makeMove(move);
+
+// Check whether the moving side's king is now in check
+bool illegal = isKingInCheck(movingWhite);
+
+// Restore the board
+undoMove();
+
+// If our king is exposed, move is illegal
+if (illegal)
+{
     return false;
+}
+
+return true;
+}
+
+
+bool Board :: isValidPawnMove(const Move& move)
+{
+     char piece = board[move.fromRow][move.fromCol];
+     char destPiece = board[move.toRow][move.toCol];
+     //for white pawn
+     if(piece == 'P')
+{
+     if (move.fromRow == 6 &&        //two square move
+         move.toRow == 4 &&
+         move.toCol == move.fromCol)
+        {
+            if (destPiece != '.')
+                return false;
+
+            if (board[move.fromRow - 1][move.fromCol] != '.')
+                return false;
+
+            return true;
+        }
+
+         // One-square move
+        if (move.toRow == move.fromRow - 1 &&
+            move.toCol == move.fromCol)
+        {
+            if (destPiece != '.')
+                return false;
+
+            return true;
+        }
+
+         // White diagonal capture
+         if (move.toRow == move.fromRow - 1 &&
+            (move.toCol == move.fromCol - 1 ||
+            move.toCol == move.fromCol + 1))
+         {
+         if (isBlackPiece(destPiece))
+         {
+            return true;
+         }
+
+           return false;
+    
+        }
+        //En-passant
+        if (move.toRow == move.fromRow - 1 &&
+           (move.toCol == move.fromCol - 1 ||
+            move.toCol == move.fromCol + 1))
+{
+    if (destPiece == '.')
+    {
+        if (lastMove.fromRow == 1 &&
+            lastMove.toRow == 3 &&
+            lastMove.toCol == move.toCol)
+        {
+            if (board[move.fromRow][move.toCol] == 'p')
+            {
+                return true;
+            }
+        }
+    }
+}
+    
+}
+
+if(piece=='p')
+{
+         // Two-square move
+        if (move.fromRow == 1 &&
+            move.toRow == 3 &&
+            move.toCol == move.fromCol)
+        {
+            if (destPiece != '.')
+                return false;
+
+            if (board[move.fromRow + 1][move.fromCol] != '.')
+                return false;
+
+            return true;
+        }
+
+        // One-square move
+        if (move.toRow == move.fromRow + 1 &&
+            move.toCol == move.fromCol)
+        {
+            if (destPiece != '.')
+                return false;
+
+            return true;
+        }
+        // Black diagonal capture
+       if (move.toRow == move.fromRow + 1 &&
+          (move.toCol == move.fromCol - 1 ||
+          move.toCol == move.fromCol + 1))
+        {
+            if (isWhitePiece(destPiece))
+            {
+               return true;
+            }
+
+          return false;
+         }
+          //En-passant
+          if (move.toRow == move.fromRow + 1 &&
+    (move.toCol == move.fromCol - 1 ||
+     move.toCol == move.fromCol + 1))
+{
+    if (destPiece == '.')
+    {
+        if (lastMove.fromRow == 6 &&
+            lastMove.toRow == 4 &&
+            lastMove.toCol == move.toCol)
+        {
+            if (board[move.fromRow][move.toCol] == 'P')
+            {
+                return true;
+            }
+        }
+    }
+}
+
+}
+  return false; 
+}
+
+bool Board::isValidBishopMove(const Move& move){
+    int rowDifference = abs(move.toRow - move.fromRow);
+    int colDifference = abs(move.toCol - move.fromCol);
+      if (rowDifference != colDifference)
+           {
+               return false;
+           }
+
+    int rowStep = (move.toRow > move.fromRow) ? 1 : -1;
+    int colStep = (move.toCol > move.fromCol) ? 1 : -1;
+    int currentRow = move.fromRow + rowStep;
+    int currentCol = move.fromCol + colStep;
+while (currentRow != move.toRow)
+{
+    if (board[currentRow][currentCol] != '.')
+    {
+        return false;
+    }
+
+    currentRow += rowStep;
+    currentCol += colStep;
+}
+
+return true;
 }
 
 bool Board::isValidKnightMove(const Move& move)
@@ -273,154 +362,6 @@ bool Board::isValidKnightMove(const Move& move)
     return false;
 }
 
-bool Board::isValidPawnMove(const Move& move)
-{
-    char piece = board[move.fromRow][move.fromCol];
-    char destinationPiece = board[move.toRow][move.toCol];
-
-    if (piece == 'P')
-    {
-        // Two-square move
-        if (move.fromRow == 6 &&
-            move.toRow == 4 &&
-            move.toCol == move.fromCol)
-        {
-            if (destinationPiece != '.')
-                return false;
-
-            if (board[move.fromRow - 1][move.fromCol] != '.')
-                return false;
-
-            return true;
-        }
-
-        // One-square move
-        if (move.toRow == move.fromRow - 1 &&
-            move.toCol == move.fromCol)
-        {
-            if (destinationPiece != '.')
-                return false;
-
-            return true;
-        }
-        // White diagonal capture
-if (move.toRow == move.fromRow - 1 &&
-    (move.toCol == move.fromCol - 1 ||
-     move.toCol == move.fromCol + 1))
-{
-    if (isBlackPiece(destinationPiece))
-    {
-        return true;
-    }
-
-    return false;
-}
-// En passant
-if (move.toRow == move.fromRow - 1 &&
-    (move.toCol == move.fromCol - 1 ||
-     move.toCol == move.fromCol + 1))
-{
-    if (destinationPiece == '.')
-    {
-        if (lastMove.fromRow == 1 &&
-            lastMove.toRow == 3 &&
-            lastMove.toCol == move.toCol)
-        {
-            if (board[move.fromRow][move.toCol] == 'p')
-            {
-                return true;
-            }
-        }
-    }
-}
-}
-
-    if (piece == 'p')
-    {
-        // Two-square move
-        if (move.fromRow == 1 &&
-            move.toRow == 3 &&
-            move.toCol == move.fromCol)
-        {
-            if (destinationPiece != '.')
-                return false;
-
-            if (board[move.fromRow + 1][move.fromCol] != '.')
-                return false;
-
-            return true;
-        }
-
-        // One-square move
-        if (move.toRow == move.fromRow + 1 &&
-            move.toCol == move.fromCol)
-        {
-            if (destinationPiece != '.')
-                return false;
-
-            return true;
-        }
-        // Black diagonal capture
-        // Black diagonal capture
-if (move.toRow == move.fromRow + 1 &&
-    (move.toCol == move.fromCol - 1 ||
-     move.toCol == move.fromCol + 1))
-{
-    if (isWhitePiece(destinationPiece))
-    {
-        return true;
-    }
-
-    return false;
-}
-// En passant
-if (move.toRow == move.fromRow + 1 &&
-    (move.toCol == move.fromCol - 1 ||
-     move.toCol == move.fromCol + 1))
-{
-    if (destinationPiece == '.')
-    {
-        if (lastMove.fromRow == 6 &&
-            lastMove.toRow == 4 &&
-            lastMove.toCol == move.toCol)
-        {
-            if (board[move.fromRow][move.toCol] == 'P')
-            {
-                return true;
-            }
-        }
-    }
-}
-}
-
-    return false;
-}
-bool Board::isValidBishopMove(const Move& move){
-    int rowDifference = abs(move.toRow - move.fromRow);
-    int colDifference = abs(move.toCol - move.fromCol);
- if (rowDifference != colDifference)
-    {
-        return false;
-    }
-
-    int rowStep = (move.toRow > move.fromRow) ? 1 : -1;
-    int colStep = (move.toCol > move.fromCol) ? 1 : -1;
-
-    int currentRow = move.fromRow + rowStep;
-    int currentCol = move.fromCol + colStep;
-while (currentRow != move.toRow)
-{
-    if (board[currentRow][currentCol] != '.')
-    {
-        return false;
-    }
-
-    currentRow += rowStep;
-    currentCol += colStep;
-}
-
-return true;
-}
 bool Board::isValidRookMove(const Move& move){
     if (move.fromRow != move.toRow &&
         move.fromCol != move.toCol)
@@ -457,6 +398,7 @@ bool Board::isValidRookMove(const Move& move){
 
 return true;
 }
+
 bool Board::isValidQueenMove(const Move& move)
 {
     if (isValidBishopMove(move))
@@ -471,540 +413,59 @@ bool Board::isValidQueenMove(const Move& move)
 
     return false;
 }
+
 bool Board::isValidKingMove(const Move& move)
 {
-    int rowDifference = abs(move.toRow - move.fromRow);
-    int colDifference = abs(move.toCol - move.fromCol);
-
-    if (rowDifference == 0 && colDifference == 0)
-    {
-        return false;
-    }
-    //---------------
-     if (rowDifference == 0 && colDifference == 2)
-{
     char piece = board[move.fromRow][move.fromCol];
+    char destPiece = board[move.toRow][move.toCol];
 
-     if (piece == 'K' && whiteKingMoved)
-    {
-    return false;
-    }
-
-    if (piece == 'k' && blackKingMoved)
-   {
-    return false;
-   }
-   // White kingside
-if (piece == 'K' && move.toCol == 6)
-{
-    if (board[7][5] != '.' || board[7][6] != '.')
-    {
-        return false;
-    }
-}
-
-// White queenside
-if (piece == 'K' && move.toCol == 2)
-{
-    if (board[7][1] != '.' ||
-        board[7][2] != '.' ||
-        board[7][3] != '.')
-    {
-        return false;
-    }
-}
-
-// Black kingside
-if (piece == 'k' && move.toCol == 6)
-{
-    if (board[0][5] != '.' || board[0][6] != '.')
-    {
-        return false;
-    }
-}
-
-// Black queenside
-if (piece == 'k' && move.toCol == 2)
-{
-    if (board[0][1] != '.' ||
-        board[0][2] != '.' ||
-        board[0][3] != '.')
-    {
-        return false;
-    }
-}
-if (piece == 'K')
-{
-    if (isKingInCheck(true))
-    {
-        return false;
-    }
-}
-
-if (piece == 'k')
-{
-    if (isKingInCheck(false))
-    {
-        return false;
-    }
-}// White kingside: e1 -> f1
-if (piece == 'K' && move.toCol == 6)
-{
-    board[7][4] = '.';
-    board[7][5] = 'K';
-
-    bool inCheck = isKingInCheck(true);
-
-    board[7][5] = '.';
-    board[7][4] = 'K';
-
-    if (inCheck)
-    {
-        return false;
-    }
-}
-if (piece == 'K' && move.toCol == 2)
-{
-    board[7][4] = '.';
-    board[7][3] = 'K';
-
-    bool inCheck = isKingInCheck(true);
-
-    board[7][3] = '.';
-    board[7][4] = 'K';
-
-    if (inCheck)
-    {
-        return false;
-    }
-}if (piece == 'k' && move.toCol == 6)
-{
-    board[0][4] = '.';
-    board[0][5] = 'k';
-
-    bool inCheck = isKingInCheck(false);
-
-    board[0][5] = '.';
-    board[0][4] = 'k';
-
-    if (inCheck)
-    {
-        return false;
-    }
-}
-   // White kingside
-if (piece == 'K' && move.toCol == 6 && whiteRightRookMoved)
-{
-    return false;
-}
-
-// White queenside
-if (piece == 'K' && move.toCol == 2 && whiteLeftRookMoved)
-{
-    return false;
-}
-
-// Black kingside
-if (piece == 'k' && move.toCol == 6 && blackRightRookMoved)
-{
-    return false;
-}
-
-// Black queenside
-if (piece == 'k' && move.toCol == 2 && blackLeftRookMoved)
-{
-    return false;
-}
-if (piece == 'K')
-{
-    board[7][4] = '.';
-    board[move.toRow][move.toCol] = 'K';
-
-    bool inCheck = isKingInCheck(true);
-
-    board[move.toRow][move.toCol] = '.';
-    board[7][4] = 'K';
-
-    if (inCheck)
-    {
-        return false;
-    }
-}
-if (piece == 'k')
-{
-    board[0][4] = '.';
-    board[move.toRow][move.toCol] = 'k';
-
-    bool inCheck = isKingInCheck(false);
-
-    board[move.toRow][move.toCol] = '.';
-    board[0][4] = 'k';
-
-    if (inCheck)
-    {
-        return false;
-    }
-}
-return true;
-}
-    //------------------
-
-    if (rowDifference <= 1 && colDifference <= 1)
-    {
-        return true;
-    }
-
-    return false;
-}
-
-
-bool Board::isLegalMove(const Move& move){
-    if (!isValidMove(move))
-    {
-        return false;
-    }
-
-    char sourcePiece = board[move.fromRow][move.fromCol];
-    char destinationPiece = board[move.toRow][move.toCol];
-
-    // Make move temporarily
-    makeMove(move);
-    
-
-    bool inCheck;
-
-    if (isWhitePiece(sourcePiece))
-    {
-        inCheck = isKingInCheck(true);
-    }
-    else
-    {
-        inCheck = isKingInCheck(false);
-    }
-
-    // Undo move
-    undoMove(move);
-    
-
-    return !inCheck;
-}
-bool Board::hasLegalMove(bool whitePlayer)
-{
-    
-    for (int fromRow = 0; fromRow < 8; fromRow++)
-    {
-        for (int fromCol = 0; fromCol < 8; fromCol++)
+    if (abs(move.toCol - move.fromCol) == 2)
         {
-            char piece = board[fromRow][fromCol];
-
-            if ((whitePlayer && !isWhitePiece(piece)) ||
-                (!whitePlayer && !isBlackPiece(piece)))
-            {
-                continue;
-            }
-
-            for (int toRow = 0; toRow < 8; toRow++)
-            {
-                for (int toCol = 0; toCol < 8; toCol++)
-                {
-                    Move move(fromRow, fromCol, toRow, toCol);
-
-                    if (isLegalMove(move))
-                    return true;
-                    
-                }
-            }
-        }
-    }
-    return false;
-}
-
-
-
-int Board::BoardEvaluation()
-{
-    int score = 0;
-    int blackBishops = 0;
-    int whiteBishops = 0;
-
-    for (int row = 0; row < 8; row++)
-    {
-        for (int col = 0; col < 8; col++)
-        {
-            
-            
-
-            switch (board[row][col])
-            {
-                case 'P': 
-                score += 100; 
-                score +=PAWN_PST[row][col];
-                break;
-                //------------
-                case 'N': 
-                score += 320; 
-                score +=KNIGHT_PST[row][col];
-                break;
-                //-------------
-                case 'B': 
-                whiteBishops++;
-                score += 330; 
-                score +=BISHOP_PST[row][col];
-                break;
-                case 'R': 
-                score += 500; 
-                score += ROOK_PST[row][col];
-                break;
-                case 'Q': 
-                score += 900; 
-                score += QUEEN_PST[row][col];
-                break;
-                case 'K':
-                score += KING_PST[row][col];
-                break;
-                //------------
-                case 'p': 
-                score -= 100; 
-                score -=PAWN_PST[7-row][col];
-                break;
-                //------------
-                case 'n': 
-                score -= 320; 
-                score -=KNIGHT_PST[7-row][col];
-                break;
-                //-------------
-                case 'b': 
-                blackBishops++;
-                score -= 330; 
-                score -=BISHOP_PST[7-row][col];
-                break;
-                case 'r': 
-                score -= 500; 
-                score -= ROOK_PST[7-row][col];
-                break;
-                case 'q': 
-                score -= 900; 
-                score -= QUEEN_PST[7-row][col];
-                break;
-                case 'k':
-                score -= KING_PST[7-row][col];
-                break;
-            }
-        }
-    }
-    if (whiteBishops >= 2)
-    score += 30;
-
-    if (blackBishops >= 2)
-    score -= 30;
-
-    return score;
-}
-std::vector<Move> Board::generateLegalMoves(bool whitePlayer)
-{
-    std::vector<Move> legalMoves;
-
-    for (int row = 0; row < 8; row++)
-    {
-        for (int col = 0; col < 8; col++)
-        {
-            char piece = board[row][col];
-
-            if (whitePlayer)
-            {
-                if (!isWhitePiece(piece))
-                {
-                    continue;
-                }
-            }
-            else
-            {
-                if (!isBlackPiece(piece))
-                {
-                    continue;
-                }
-            }
-
-            for (int toRow = 0; toRow < 8; toRow++)
-{
-                   for (int toCol = 0; toCol < 8; toCol++)
-    {
-        Move move(row, col, toRow, toCol);
-
-        if (isLegalMove(move))
-        {
-            legalMoves.push_back(move);
-        }
-    }
-}
-
-        }
-    }
-
-    return legalMoves;
-}
-
-
-
-
-void Board::undoMove(const Move& move)
-{
-    UndoInfo undo = history.back();
-
-    // Undo castling rook move
-    if ((undo.movedPiece == 'K' || undo.movedPiece == 'k') &&
-        abs(undo.move.toCol - undo.move.fromCol) == 2)
-    {
-        // White kingside
-        if (undo.movedPiece == 'K' &&
-            undo.move.fromRow == 7 &&
-            undo.move.toCol == 6)
-        {
-            board[7][7] = board[7][5];
-            board[7][5] = '.';
+           return isValidCastle(move);
         }
 
-        // White queenside
-        else if (undo.movedPiece == 'K' &&
-                 undo.move.fromRow == 7 &&
-                 undo.move.toCol == 2)
+    if (piece != 'K' && piece != 'k')
         {
-            board[7][0] = board[7][3];
-            board[7][3] = '.';
+           return false;
         }
-
-        // Black kingside
-        else if (undo.movedPiece == 'k' &&
-                 undo.move.fromRow == 0 &&
-                 undo.move.toCol == 6)
-        {
-            board[0][7] = board[0][5];
-            board[0][5] = '.';
-        }
-
-        // Black queenside
-        else if (undo.movedPiece == 'k' &&
-                 undo.move.fromRow == 0 &&
-                 undo.move.toCol == 2)
-        {
-            board[0][0] = board[0][3];
-            board[0][3] = '.';
-        }
-    }
-
-    // Existing code
-    board[undo.move.fromRow][undo.move.fromCol] = undo.movedPiece;
-    board[undo.move.toRow][undo.move.toCol] = undo.capturedPiece;
-
-    whiteKingMoved = undo.whiteKingMoved;
-    blackKingMoved = undo.blackKingMoved;
-
-    whiteLeftRookMoved = undo.whiteLeftRookMoved;
-    whiteRightRookMoved = undo.whiteRightRookMoved;
-
-    blackLeftRookMoved = undo.blackLeftRookMoved;
-    blackRightRookMoved = undo.blackRightRookMoved;
-
-    history.pop_back();
-    lastMove = undo.previousLastMove;
-}
-
-void Board::initializeZobristTable()
-{
-    std::mt19937_64 rng(2026);
-
-    for (int piece = 0; piece < 12; piece++)
-    {
-        for (int square = 0; square < 64; square++)
-        {
-            zobristTable[piece][square] = rng();
-        }
-    }
-}
-int Board::pieceToIndex(char piece)
-{
-    if (piece == 'P')
-        return 0;
-    else if (piece == 'N')
-        return 1;
-    else if (piece == 'B')
-        return 2;
-    else if (piece == 'R')
-        return 3;
-    else if (piece == 'Q')
-        return 4;
-    else if (piece == 'K')
-        return 5;
-
-    else if (piece == 'p')
-        return 6;
-    else if (piece == 'n')
-        return 7;
-    else if (piece == 'b')
-        return 8;
-    else if (piece == 'r')
-        return 9;
-    else if (piece == 'q')
-        return 10;
-    else if (piece == 'k')
-        return 11;
-
-    return -1;
-}
-uint64_t Board::generateHash()
-{
-    uint64_t hash = 0;
-
-    for (int row = 0; row < 8; row++)
-    {
-        for (int col = 0; col < 8; col++)
-        {
-            char piece = board[row][col];
-
-            int pieceIndex = pieceToIndex(piece);
-
-            if (pieceIndex == -1)
-            {
-                continue;
-            }
-
-            int square = row * 8 + col;
-
-            hash ^= zobristTable[pieceIndex][square];
-        }
-    }
-
-    return hash;
-}
-void Board::debugSearch(const Move& move,
-                        int depth,
-                        int score,
-                        const std::string& action)
-{
-    
 
     
+    if (abs(move.toRow - move.fromRow) > 1 ||
+        abs(move.toCol - move.fromCol) > 1)
+    {
+        return false;
+    }
 
-    cout << " "
-         << char('a' + move.fromCol)
-         << 8 - move.fromRow
-         << " -> "
-         << char('a' + move.toCol)
-         << 8 - move.toRow
-         << endl;
+    // Cannot capture own piece
+    if (isWhitePiece(piece) && isWhitePiece(destPiece))
+    {
+        return false;
+    }
 
-   
+    if (isBlackPiece(piece) && isBlackPiece(destPiece))
+    {
+        return false;
+    }
 
-    
+    bool white = (piece == 'K');
+
+    // Check destination square
+    if (isSquareAttacked(move.toRow, move.toCol, !white))
+    {
+        return false;
+    }
+
+    return true;
 }
-bool Board::isKingInCheck(bool whiteKing)
+
+bool Board::isKingInCheck(bool white)
 {
-    char king = whiteKing ? 'K' : 'k';
+    char king = white ? 'K' : 'k';
 
     int kingRow = -1;
     int kingCol = -1;
 
-    // Find the king
+    // Find king
     for (int row = 0; row < 8; row++)
     {
         for (int col = 0; col < 8; col++)
@@ -1017,212 +478,910 @@ bool Board::isKingInCheck(bool whiteKing)
             }
         }
     }
-         return isSquareAttacked(kingRow, kingCol, !whiteKing);
+
+    // Opposite color attacks this king
+    return isSquareAttacked(kingRow, kingCol, !white);
 }
 
-
-bool Board::isSquareAttacked(int row, int col, bool byWhite){
+bool Board :: isSquareAttacked(int row, int col, bool byWhite)
+{   
+    //Pawn attack
     if (byWhite)
-{
-    if (row > 0)
     {
-        if (col > 0 && board[row - 1][col - 1] == 'P')
-            return true;
+        // White pawns attack upward
+        if (row + 1 < 8)
+        {
+            if (col - 1 >= 0 && board[row + 1][col - 1] == 'P')
+                return true;
 
-        if (col < 7 && board[row - 1][col + 1] == 'P')
-            return true;
+            if (col + 1 < 8 && board[row + 1][col + 1] == 'P')
+                return true;
+        }
     }
+    else
+    {
+        // Black pawns attack downward
+        if (row - 1 >= 0)
+        {
+            if (col - 1 >= 0 && board[row - 1][col - 1] == 'p')
+                return true;
+
+            if (col + 1 < 8 && board[row - 1][col + 1] == 'p')
+                return true;
+        }
+    }
+
+    // Knight attacks
+    char knight = byWhite ? 'N' : 'n';
+
+const int knightMoves[8][2] =
+{
+    {-2, -1},
+    {-2,  1},
+    {-1, -2},
+    {-1,  2},
+    { 1, -2},
+    { 1,  2},
+    { 2, -1},
+    { 2,  1}
+};
+
+for (int i = 0; i < 8; i++)
+{
+    int attackRow = row + knightMoves[i][0];
+    int attackCol = col + knightMoves[i][1];
+
+    if (attackRow >= 0 && attackRow < 8 &&
+        attackCol >= 0 && attackCol < 8)
+    {
+        if (board[attackRow][attackCol] == knight)
+        {
+            return true;
+        }
+    }
+}
+
+// King attacks
+char enemyKing = byWhite ? 'K' : 'k';
+
+for (int r = row - 1; r <= row + 1; r++)
+{
+    for (int c = col - 1; c <= col + 1; c++)
+    {
+        // Stay inside the board
+        if (r < 0 || r >= 8 ||
+            c < 0 || c >= 8)
+        {
+            continue;
+        }
+
+        // Don't check the square itself
+        if (r == row && c == col)
+        {
+            continue;
+        }
+
+        if (board[r][c] == enemyKing)
+        {
+            return true;
+        }
+    }
+}
+
+//Bishop attack
+char bishop = byWhite ? 'B' : 'b';
+char queen  = byWhite ? 'Q' : 'q';
+
+const int diagonalDirections[4][2] =
+{
+    {-1, -1},   
+    {-1,  1},   
+    { 1, -1},   
+    { 1,  1}    
+};
+
+for (int i = 0; i < 4; i++)
+{
+    int r = row + diagonalDirections[i][0];
+    int c = col + diagonalDirections[i][1];
+
+    while (r >= 0 && r < 8 &&
+           c >= 0 && c < 8)
+    {
+        
+        if (board[r][c] != '.')
+        {
+            // Enemy bishop or queen found
+            if (board[r][c] == bishop ||
+                board[r][c] == queen)
+            {
+                return true;
+            }
+
+            break;
+        }
+
+        // Continue along the diagonal
+        r += diagonalDirections[i][0];
+        c += diagonalDirections[i][1];
+    }
+}
+ 
+// Rook / Queen attacks
+char rook = byWhite ? 'R' : 'r';
+const int straightDirections[4][2] =
+{
+    {-1, 0},    
+    { 1, 0},    
+    { 0,-1},    
+    { 0, 1}     
+};
+
+for (int i = 0; i < 4; i++)
+{
+    int r = row + straightDirections[i][0];
+    int c = col + straightDirections[i][1];
+
+    while (r >= 0 && r < 8 &&
+           c >= 0 && c < 8)
+    {
+        if (board[r][c] != '.')
+        {
+            // Rook or Queen found
+            if (board[r][c] == rook ||
+                board[r][c] == queen)
+            {
+                return true;
+            }
+
+            break;
+        }
+
+        r += straightDirections[i][0];
+        c += straightDirections[i][1];
+    }
+}
+    return false;
+}
+
+static int getCastlingRights(const Board& board)
+{
+    int rights = 0;
+
+    if (board.canWhiteKingSideCastle())
+        rights |= 1;
+
+    if (board.canWhiteQueenSideCastle())
+        rights |= 2;
+
+    if (board.canBlackKingSideCastle())
+        rights |= 4;
+
+    if (board.canBlackQueenSideCastle())
+        rights |= 8;
+
+    return rights;
+}
+
+//After validating move board make move
+void Board::makeMove(const Move& move)
+{
+    UndoInfo undo;
+
+    undo.move = move;
+    undo.previousWhiteTurn = whiteTurn;
+    undo.previouslastMove = lastMove;
+
+    undo.movedPiece =
+        board[move.fromRow][move.fromCol];
+
+    undo.capturedPiece =
+        board[move.toRow][move.toCol];
+
+    undo.whiteKingMoved = whiteKingMoved;
+    undo.blackKingMoved = blackKingMoved;
+
+    undo.whiteLeftRookMoved =
+        whiteLeftRookMoved;
+
+    undo.whiteRightRookMoved =
+        whiteRightRookMoved;
+
+    undo.blackLeftRookMoved =
+        blackLeftRookMoved;
+
+    undo.blackRightRookMoved =
+        blackRightRookMoved;
+
+    undo.wasCastling = false;
+    undo.wasEnPassant = false;
+    undo.enPassantCapturedPiece = '.';
+    undo.enPassantCapturedRow = -1;
+    undo.enPassantCapturedCol = -1;
+
+    // Save current hash
+    undo.previousZobristHash =
+        zobristHash;
+
+    history.push_back(undo);
+
+    int oldCastlingRights =
+        getCastlingRights(*this);
+
+    int oldEpSquare =
+        getEnPassantSquare();
+
+    // Remove old castling rights
+    zobristHash ^=
+        Zobrist::getCastlingKey(
+            oldCastlingRights);
+
+    // Remove old en-passant state
+    if (oldEpSquare != -1)
+    {
+        zobristHash ^=
+            Zobrist::getEnPassantKey(
+                oldEpSquare);
+    }
+
+    // Remove old side-to-move
+    zobristHash ^=
+        Zobrist::getSideKey();
+
+    char movedPiece =
+        board[move.fromRow][move.fromCol];
+
+    bool isCastling = false;
+    bool isEnPassant = false;
+
+    if (movedPiece == 'K' &&
+        move.fromRow == 7 &&
+        move.fromCol == 4 &&
+        move.toRow == 7 &&
+        (move.toCol == 6 ||
+         move.toCol == 2))
+    {
+        isCastling = true;
+    }
+
+    if (movedPiece == 'k' &&
+        move.fromRow == 0 &&
+        move.fromCol == 4 &&
+        move.toRow == 0 &&
+        (move.toCol == 6 ||
+         move.toCol == 2))
+    {
+        isCastling = true;
+    }
+
+    // Normal moving piece
+    removePieceHash(
+        zobristHash,
+        movedPiece,
+        move.fromRow,
+        move.fromCol);
+
+    // Captured piece
+    removePieceHash(
+        zobristHash,
+        undo.capturedPiece,
+        move.toRow,
+        move.toCol);
+
+  int enPassantSquare = getEnPassantSquare();
+
+if (enPassantSquare != -1 &&
+    (movedPiece == 'P' || movedPiece == 'p'))
+{
+    int epRow = enPassantSquare / 8;
+    int epCol = enPassantSquare % 8;
+
+    if (move.toRow == epRow &&
+        move.toCol == epCol &&
+        board[move.toRow][move.toCol] == '.')
+    {
+        isEnPassant = true;
+    }
+}
+history.back().wasCastling = isCastling;
+
+   if (isEnPassant)
+{
+    int capturedPawnRow;
+
+    if (movedPiece == 'P')
+        capturedPawnRow = move.toRow + 1;
+    else
+        capturedPawnRow = move.toRow - 1;
+
+    char capturedPawn =
+        board[capturedPawnRow][move.toCol];
+
+    // Save EP information for undo
+    history.back().wasEnPassant = true;
+
+    history.back().enPassantCapturedPiece =
+        capturedPawn;
+
+    history.back().enPassantCapturedRow =
+        capturedPawnRow;
+
+    history.back().enPassantCapturedCol =
+        move.toCol;
+
+    // Remove captured pawn from Zobrist hash
+    removePieceHash(
+        zobristHash,
+        capturedPawn,
+        capturedPawnRow,
+        move.toCol);
+
+    // Remove captured pawn from board
+    board[capturedPawnRow][move.toCol] = '.';
+}
+    if (isCastling)
+    {
+
+        if (movedPiece == 'K' &&
+            move.toCol == 6)
+        {
+            // Remove rook from old square
+            removePieceHash(
+                zobristHash,
+                'R',
+                7,
+                7);
+
+            // Add king to g1
+            zobristHash ^=
+                Zobrist::getPieceKey(
+                    'K',
+                    7 * 8 + 6);
+
+            // Add rook to f1
+            zobristHash ^=
+                Zobrist::getPieceKey(
+                    'R',
+                    7 * 8 + 5);
+
+            board[7][4] = '.';
+            board[7][6] = 'K';
+
+            board[7][7] = '.';
+            board[7][5] = 'R';
+
+            whiteKingMoved = true;
+            whiteRightRookMoved = true;
+        }
+
+        else if (movedPiece == 'K' &&
+                 move.toCol == 2)
+        {
+            removePieceHash(
+                zobristHash,
+                'R',
+                7,
+                0);
+
+            zobristHash ^=
+                Zobrist::getPieceKey(
+                    'K',
+                    7 * 8 + 2);
+
+            zobristHash ^=
+                Zobrist::getPieceKey(
+                    'R',
+                    7 * 8 + 3);
+
+            board[7][4] = '.';
+            board[7][2] = 'K';
+
+            board[7][0] = '.';
+            board[7][3] = 'R';
+
+            whiteKingMoved = true;
+            whiteLeftRookMoved = true;
+        }
+
+       
+
+        else if (movedPiece == 'k' &&
+                 move.toCol == 6)
+        {
+            removePieceHash(
+                zobristHash,
+                'r',
+                0,
+                7);
+
+            zobristHash ^=
+                Zobrist::getPieceKey(
+                    'k',
+                    0 * 8 + 6);
+
+            zobristHash ^=
+                Zobrist::getPieceKey(
+                    'r',
+                    0 * 8 + 5);
+
+            board[0][4] = '.';
+            board[0][6] = 'k';
+
+            board[0][7] = '.';
+            board[0][5] = 'r';
+
+            blackKingMoved = true;
+            blackRightRookMoved = true;
+        }
+
+       
+        else
+        {
+            removePieceHash(zobristHash, 'r', 0, 0);
+
+            zobristHash ^= Zobrist::getPieceKey('k', 0 * 8 + 2);
+
+            zobristHash ^= Zobrist::getPieceKey('r',0 * 8 + 3);
+
+            board[0][4] = '.';
+            board[0][2] = 'k';
+
+            board[0][0] = '.';
+            board[0][3] = 'r';
+
+            blackKingMoved = true;
+            blackLeftRookMoved = true;
+        }
+
+        lastMove = move;
+        whiteTurn = !whiteTurn;
+    }
+
+    else
+    {
+        // Update castling rights
+        if (movedPiece == 'K')
+            whiteKingMoved = true;
+
+        if (movedPiece == 'k')
+            blackKingMoved = true;
+
+        if (movedPiece == 'R' &&
+            move.fromRow == 7 &&
+            move.fromCol == 0)
+        {
+            whiteLeftRookMoved = true;
+        }
+
+        if (movedPiece == 'R' &&
+            move.fromRow == 7 &&
+            move.fromCol == 7)
+        {
+            whiteRightRookMoved = true;
+        }
+
+        if (movedPiece == 'r' &&
+            move.fromRow == 0 &&
+            move.fromCol == 0)
+        {
+            blackLeftRookMoved = true;
+        }
+
+        if (movedPiece == 'r' &&
+            move.fromRow == 0 &&
+            move.fromCol == 7)
+        {
+            blackRightRookMoved = true;
+        }
+
+        //for pawn promotion
+        char pieceToPlace = movedPiece;
+
+if (move.promotion != '\0')
+{
+    // White promotion
+    if (movedPiece == 'P')
+    {
+        pieceToPlace = move.promotion;
+    }
+
+    // Black promotion
+    else if (movedPiece == 'p')
+    {
+        pieceToPlace =
+            move.promotion - ('A' - 'a');
+    }
+}
+        // Move piece on board
+        board[move.toRow][move.toCol] =
+    pieceToPlace;
+
+        board[move.fromRow][move.fromCol] =
+            '.';
+        
+        // Add moving piece at new square
+        zobristHash ^=
+    Zobrist::getPieceKey(
+        pieceToPlace,
+        move.toRow * 8 +
+        move.toCol);
+
+        lastMove = move;
+        whiteTurn = !whiteTurn;
+    }
+
+    int newCastlingRights =
+        getCastlingRights(*this);
+
+    int newEpSquare =
+        getEnPassantSquare();
+
+    // Add new castling rights
+    zobristHash ^=
+        Zobrist::getCastlingKey(
+            newCastlingRights);
+
+    // Add new en-passant state
+    if (newEpSquare != -1)
+    {
+        zobristHash ^=
+            Zobrist::getEnPassantKey(
+                newEpSquare);
+    }
+
+    // Add new side-to-move
+    zobristHash ^= Zobrist::getSideKey();
+}
+void Board::undoMove()
+{
+    if (history.empty())
+        return;
+
+    UndoInfo undo = history.back();
+    history.pop_back();
+    
+    // Restore turn
+    whiteTurn = undo.previousWhiteTurn;
+
+    // Restore last move
+    lastMove = undo.previouslastMove;
+
+    // Restore castling rights
+    whiteKingMoved = undo.whiteKingMoved;
+    blackKingMoved = undo.blackKingMoved;
+
+    whiteLeftRookMoved = undo.whiteLeftRookMoved;
+
+    whiteRightRookMoved = undo.whiteRightRookMoved;
+
+    blackLeftRookMoved = undo.blackLeftRookMoved;
+
+    blackRightRookMoved = undo.blackRightRookMoved;
+
+
+    if (undo.wasCastling)
+{
+    char movedPiece = undo.movedPiece;
+
+    // White king-side
+    if (movedPiece == 'K' &&
+        undo.move.toCol == 6)
+    {
+        board[7][4] = 'K';
+        board[7][6] = '.';
+
+        board[7][7] = 'R';
+        board[7][5] = '.';
+    }
+
+    // White queen-side
+    else if (movedPiece == 'K' &&
+             undo.move.toCol == 2)
+    {
+        board[7][4] = 'K';
+        board[7][2] = '.';
+
+        board[7][0] = 'R';
+        board[7][3] = '.';
+    }
+
+    // Black king-side
+    else if (movedPiece == 'k' &&
+             undo.move.toCol == 6)
+    {
+        board[0][4] = 'k';
+        board[0][6] = '.';
+
+        board[0][7] = 'r';
+        board[0][5] = '.';
+    }
+
+    // Black queen-side
+    else if (movedPiece == 'k' &&
+             undo.move.toCol == 2)
+    {
+        board[0][4] = 'k';
+        board[0][2] = '.';
+
+        board[0][0] = 'r';
+        board[0][3] = '.';
+    }
+}
+else if (undo.wasEnPassant)
+{
+    // Restore the moving pawn
+    board[undo.move.fromRow][undo.move.fromCol] =
+        undo.movedPiece;
+
+    // Destination was empty before en passant
+    board[undo.move.toRow][undo.move.toCol] =
+        '.';
+
+    // Restore the captured pawn
+    board[undo.enPassantCapturedRow]
+         [undo.enPassantCapturedCol] =
+        undo.enPassantCapturedPiece;
 }
 else
 {
-    if (row < 7)
-    {
-        if (col > 0 && board[row + 1][col - 1] == 'p')
-            return true;
+    // Normal move
+    board[undo.move.fromRow][undo.move.fromCol] =
+        undo.movedPiece;
 
-        if (col < 7 && board[row + 1][col + 1] == 'p')
-            return true;
-    }
-}
-const int knightMoves[8][2] =
-{
-    {-2,-1},
-    {-2, 1},
-    {-1,-2},
-    {-1, 2},
-    { 1,-2},
-    { 1, 2},
-    { 2,-1},
-    { 2, 1}
-};
-
-for (int i = 0; i < 8; i++)
-{
-    int r = row + knightMoves[i][0];
-    int c = col + knightMoves[i][1];
-
-    if (r < 0 || r > 7 || c < 0 || c > 7)
-        continue;
-
-    if (byWhite)
-    {
-        if (board[r][c] == 'N')
-            return true;
-    }
-    else
-    {
-        if (board[r][c] == 'n')
-            return true;
-    }
-}
-// Bishop directions
-const int bishopDirections[4][2] =
-{
-    {-1,-1},
-    {-1, 1},
-    { 1,-1},
-    { 1, 1}
-};
-
-for (int d = 0; d < 4; d++)
-{
-    int r = row + bishopDirections[d][0];
-    int c = col + bishopDirections[d][1];
-
-    while (r >= 0 && r < 8 && c >= 0 && c < 8)
-    {
-        if (board[r][c] != '.')
-        {
-            if (byWhite)
-            {
-                if (board[r][c] == 'B' || board[r][c] == 'Q')
-                    return true;
-            }
-            else
-            {
-                if (board[r][c] == 'b' || board[r][c] == 'q')
-                    return true;
-            }
-
-            break;      // blocked by any piece
-        }
-
-        r += bishopDirections[d][0];
-        c += bishopDirections[d][1];
-    }
-}
-// Rook directions
-const int rookDirections[4][2] =
-{
-    {-1, 0}, // Up
-    { 1, 0}, // Down
-    { 0,-1}, // Left
-    { 0, 1}  // Right
-};
-
-for (int d = 0; d < 4; d++)
-{
-    int r = row + rookDirections[d][0];
-    int c = col + rookDirections[d][1];
-
-    while (r >= 0 && r < 8 && c >= 0 && c < 8)
-    {
-        if (board[r][c] != '.')
-        {
-            if (byWhite)
-            {
-                if (board[r][c] == 'R' || board[r][c] == 'Q')
-                    return true;
-            }
-            else
-            {
-                if (board[r][c] == 'r' || board[r][c] == 'q')
-                    return true;
-            }
-
-            break;      // blocked
-        }
-
-        r += rookDirections[d][0];
-        c += rookDirections[d][1];
-    }
-}
-// King attacks
-const int kingMoves[8][2] =
-{
-    {-1,-1},
-    {-1, 0},
-    {-1, 1},
-    { 0,-1},
-    { 0, 1},
-    { 1,-1},
-    { 1, 0},
-    { 1, 1}
-};
-
-for (int i = 0; i < 8; i++)
-{
-    int r = row + kingMoves[i][0];
-    int c = col + kingMoves[i][1];
-
-    if (r < 0 || r > 7 || c < 0 || c > 7)
-        continue;
-
-    if (byWhite)
-    {
-        if (board[r][c] == 'K')
-            return true;
-    }
-    else
-    {
-        if (board[r][c] == 'k')
-            return true;
-    }
+    board[undo.move.toRow][undo.move.toCol] =
+        undo.capturedPiece;
 }
 
-return false;
+zobristHash =
+    undo.previousZobristHash;
+
+
 }
 
-    bool Board::isCheckmate(bool whitePlayer)
+
+bool Board::isValidCastle(const Move& move)
 {
-    return isKingInCheck(whitePlayer) &&
-           !hasLegalMove(whitePlayer);
-}
+    char piece = board[move.fromRow][move.fromCol];
 
-bool Board::isStalemate(bool whitePlayer)
-{
-    return !isKingInCheck(whitePlayer) &&
-           !hasLegalMove(whitePlayer);
-}
-void Board::pawnPromotion()
-{
-    // Temporary placeholder
-}
-
-int Board :: moveScore(const Move& move){
- int score = 0;
-
-    char attacker = board[move.fromRow][move.fromCol];
-    char victim   = board[move.toRow][move.toCol];
     
-
-    switch (victim)
+    // WHITE CASTLING
+    if (piece == 'K')
     {
-        case 'Q':
-        case 'q': score += 900; break;
+        // White kingside: e1 to g1
+        if (move.fromRow == 7 &&
+            move.fromCol == 4 &&
+            move.toRow == 7 &&
+            move.toCol == 6)
+        {
+            // King must not have moved
+            if (whiteKingMoved)
+                return false;
 
-        case 'R':
-        case 'r': score += 500; break;
+            // h1 rook must not have moved
+            if (whiteRightRookMoved)
+                return false;
 
-        case 'B':
-        case 'b':
-        case 'N':
-        case 'n': score += 300; break;
+            // f1 and g1 must be empty
+            if (board[7][5] != '.' ||
+                board[7][6] != '.')
+                return false;
 
-        case 'P':
-        case 'p': score += 100; break;
+            // King cannot be in check,
+            // pass through check, or land in check
+            if (isSquareAttacked(7, 4, false) ||
+                isSquareAttacked(7, 5, false) ||
+                isSquareAttacked(7, 6, false))
+                return false;
+
+            return true;
+        }
+
+        // White queenside: e1 to c1
+        if (move.fromRow == 7 &&
+            move.fromCol == 4 &&
+            move.toRow == 7 &&
+            move.toCol == 2)
+        {
+            if (whiteKingMoved)
+                return false;
+
+            // a1 rook must not have moved
+            if (whiteLeftRookMoved)
+                return false;
+
+            // b1, c1 and d1 must be empty
+            if (board[7][1] != '.' ||
+                board[7][2] != '.' ||
+                board[7][3] != '.')
+                return false;
+
+            // e1, d1 and c1 cannot be attacked
+            if (isSquareAttacked(7, 4, false) ||
+                isSquareAttacked(7, 3, false) ||
+                isSquareAttacked(7, 2, false))
+                return false;
+
+            return true;
+        }
     }
 
-    return score;
+    // BLACK CASTLING
+    if (piece == 'k')
+    {
+        // Black kingside: e8 to g8
+        if (move.fromRow == 0 &&
+            move.fromCol == 4 &&
+            move.toRow == 0 &&
+            move.toCol == 6)
+        {
+            if (blackKingMoved)
+                return false;
 
+            // h8 rook must not have moved
+            if (blackRightRookMoved)
+                return false;
+
+            // f8 and g8 must be empty
+            if (board[0][5] != '.' ||
+                board[0][6] != '.')
+                return false;
+
+            // e8, f8 and g8 cannot be attacked by White
+            if (isSquareAttacked(0, 4, true) ||
+                isSquareAttacked(0, 5, true) ||
+                isSquareAttacked(0, 6, true))
+                return false;
+
+            return true;
+        }
+
+        // Black queenside: e8 to c8
+        if (move.fromRow == 0 &&
+            move.fromCol == 4 &&
+            move.toRow == 0 &&
+            move.toCol == 2)
+        {
+            if (blackKingMoved)
+                return false;
+
+            // a8 rook must not have moved
+            if (blackLeftRookMoved)
+                return false;
+
+            // b8, c8 and d8 must be empty
+            if (board[0][1] != '.' ||
+                board[0][2] != '.' ||
+                board[0][3] != '.')
+                return false;
+
+            // e8, d8 and c8 cannot be attacked by White
+            if (isSquareAttacked(0, 4, true) ||
+                isSquareAttacked(0, 3, true) ||
+                isSquareAttacked(0, 2, true))
+                return false;
+
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool Board::hasLegalMove(bool white)
+{
+    // Remember whose turn it actually was
+    bool oldTurn = whiteTurn;
+
+    // Temporarily test moves for the requested side
+    whiteTurn = white;
+
+    // Search every square
+    for (int fromRow = 0; fromRow < 8; fromRow++)
+    {
+        for (int fromCol = 0; fromCol < 8; fromCol++)
+        {
+            char piece = board[fromRow][fromCol];
+
+            // Skip empty squares
+            if (piece == '.')
+                continue;
+
+            // Skip opponent's pieces
+            if (white && !isWhitePiece(piece))
+                continue;
+
+            if (!white && !isBlackPiece(piece))
+                continue;
+
+            // Try every destination square
+            for (int toRow = 0; toRow < 8; toRow++)
+            {
+                for (int toCol = 0; toCol < 8; toCol++)
+                {
+                    Move move(fromRow, fromCol, toRow, toCol);
+
+                    if (isValidMove(move))
+                        return true;
+                }
+            }
+        }
+    }
+    whiteTurn = oldTurn;
+    return false;
+}
+
+bool Board::isCheckmate(bool white)
+{
+    if (!isKingInCheck(white))
+        return false;
+
+    return !hasLegalMove(white);
+}
+
+bool Board::isStalemate(bool white)
+{
+    if (isKingInCheck(white))
+        return false;
+
+    return !hasLegalMove(white);
+}
+char Board::getPiece(int row, int col) const
+{
+    return board[row][col];
+}
+void Board::setPiece(int row, int col, char piece)
+{
+    board[row][col] = piece;
+}
+
+bool Board::canWhiteKingSideCastle() const
+{
+    return !whiteKingMoved &&
+           !whiteRightRookMoved;
+}
+
+bool Board::canWhiteQueenSideCastle() const
+{
+    return !whiteKingMoved &&
+           !whiteLeftRookMoved;
+}
+
+bool Board::canBlackKingSideCastle() const
+{
+    return !blackKingMoved &&
+           !blackRightRookMoved;
+}
+
+bool Board::canBlackQueenSideCastle() const
+{
+    return !blackKingMoved &&
+           !blackLeftRookMoved;
+}
+
+int Board::getEnPassantSquare() const
+{
+    if (lastMove.fromRow == -1)
+        return -1;
+
+    char pawn =
+        board[lastMove.toRow][lastMove.toCol];
+
+    if (pawn != 'P' && pawn != 'p')
+        return -1;
+
+    if (abs(lastMove.toRow - lastMove.fromRow) != 2)
+        return -1;
+
+    int targetRow =
+        (lastMove.fromRow + lastMove.toRow) / 2;
+
+    int targetCol =
+        lastMove.fromCol;
+
+    return targetRow * 8 + targetCol;
+}
+
+uint64_t Board::getZobristHash() const
+{
+    return zobristHash;
 }
