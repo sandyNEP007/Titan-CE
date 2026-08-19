@@ -16,7 +16,7 @@ This project is being developed step by step to understand the internal architec
 
 ## Search Engine
 
-* ✅ Minimax Search
+* ✅ Negamax Search
 * ✅ Alpha-Beta Pruning
 * ✅ Root Move Analysis
 * ✅ Best Move Selection
