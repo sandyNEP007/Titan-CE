@@ -8,10 +8,10 @@
 #include <unordered_map>
 #include <vector>
 
+
 class EngineSearch
 {
 public:
-
     static Move findBestMove(Board& board, int maxdepth);
     static int getMoveOrderingScore(Board& board, const Move& move, int depth);
     static int getMVVLVAScore(Board& board, const Move& move);
@@ -24,8 +24,7 @@ public:
     static long long ttHits;
 
 private:
-
- enum TTFlag
+enum TTFlag
 {
     TT_EXACT,
     TT_ALPHA,
@@ -40,13 +39,14 @@ struct TTEntry
     TTFlag flag;
     Move bestMove;
 };
+    static std::unordered_map<uint64_t, TTEntry> transpositionTable;
     static int negamax(Board& board, int depth, int alpha, int beta);
     static int quiescence(Board& board, int alpha, int beta);
     static const int MAX_PLY = 64;
     static Move killerMoves[MAX_PLY][2];
     static bool isCapture(Board& board, const Move& move);
     static int historyTable[2][64][64];
-    static std::unordered_map<uint64_t, TTEntry> transpositionTable;
+    
     
 };
 
