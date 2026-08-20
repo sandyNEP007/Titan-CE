@@ -11,17 +11,17 @@ class UCI
 private:
     static Board board;
 
-    // Convert internal Move to UCI notation
     static void printMove(const Move& move);
 
-    // Apply one UCI move to the current board
     static bool applyMove(const std::string& moveString);
 
-    // Handle: position startpos [moves ...]
+    static bool loadFEN(const std::string& fen);
+
     static void handlePosition(const std::string& command);
 
-    // Handle: go depth N
     static void handleGo(const std::string& command);
+
+    static void handleSetOption(const std::string& command);
 
 public:
     static void loop();
