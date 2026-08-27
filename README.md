@@ -47,20 +47,20 @@ This project is being developed step by step to understand the internal architec
 
 * [x] Board Representation
 * [x] Legal Move Generation
-* [x] Minimax Search
+* [x] Negamax Search
 * [x] Alpha-Beta Pruning
 * [x] Zobrist Hashing
 * [x] Transposition Table
-* [ ] Piece-Square Tables
-* [ ] Move Ordering
-* [ ] Iterative Deepening
-* [ ] Quiescence Search
-* [ ] Killer Move Heuristic
-* [ ] History Heuristic
-* [ ] Null Move Pruning
-* [ ] UCI Protocol
-* [ ] Graphical User Interface
-* [ ] NNUE Evaluation
+* [x] Piece-Square Tables
+* [x] Move Ordering
+* [x] Iterative Deepening
+* [x] Quiescence Search
+* [x] Killer Move Heuristic
+* [x] History Heuristic
+* [x] Null Move Pruning
+* [x] UCI Protocol
+* [x] Graphical User Interface
+* [ ] NNUE Evaluation [undergoing...]
 
 ---
 
