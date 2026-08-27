@@ -55,8 +55,7 @@ std::vector<Move> MoveGenerator::generateLegalMoves(Board& board)
     {
         board.makeMove(move);
 
-        bool leavesKingInCheck =
-            board.isKingInCheck(movingSide);
+        bool leavesKingInCheck = board.isKingInCheck(movingSide);
 
         board.undoMove();
 
@@ -69,12 +68,7 @@ std::vector<Move> MoveGenerator::generateLegalMoves(Board& board)
     return legalMoves;
 }
 
-void MoveGenerator::addPromotionMoves(
-    int fromRow,
-    int fromCol,
-    int toRow,
-    int toCol,
-    std::vector<Move>& moves)
+void MoveGenerator::addPromotionMoves(int fromRow, int fromCol, int toRow, int toCol, std::vector<Move>& moves)
 {
     moves.push_back(
         Move(fromRow, fromCol, toRow, toCol, 'Q')
@@ -94,11 +88,7 @@ void MoveGenerator::addPromotionMoves(
 }
 
 //Generating pseudo-legal move of pawn
-void MoveGenerator::generatePawnMoves(
-    Board& board,
-    int row,
-    int col,
-    std::vector<Move>& moves)
+void MoveGenerator::generatePawnMoves(Board& board, int row, int col, std::vector<Move>& moves)
 {
     char piece = board.getPiece(row, col);
     
@@ -259,17 +249,12 @@ if (enPassantSquare != -1)
     else
     {
         // Normal move
-        moves.push_back(
-            Move(row, col, row + 1, col)
-        );
+        moves.push_back(Move(row, col, row + 1, col));
 
         // Two squares from starting rank
-        if (row == 1 &&
-            board.getPiece(row + 2, col) == '.')
+        if (row == 1 && board.getPiece(row + 2, col) == '.')
         {
-            moves.push_back(
-                Move(row, col, row + 2, col)
-            );
+            moves.push_back(Move(row, col, row + 2, col));
         }
     }
 }
@@ -334,15 +319,42 @@ if (row + 1 <= 7 && col + 1 <= 7 &&
         );
     }
 }
+// Black en passant
+int enPassantSquare = board.getEnPassantSquare();
+
+if (enPassantSquare != -1)
+{
+    int epRow = enPassantSquare / 8;
+    int epCol = enPassantSquare % 8;
+
+    // Black pawn must be on the 4th rank
+    if (row == 4)
+    {
+        // Capture to the left
+        if (epRow == row + 1 &&
+            epCol == col - 1)
+        {
+            moves.push_back(
+                Move(row, col, epRow, epCol)
+            );
+        }
+
+        // Capture to the right
+        if (epRow == row + 1 &&
+            epCol == col + 1)
+        {
+            moves.push_back(
+                Move(row, col, epRow, epCol)
+            );
+        }
+    }
+}
+
     }
 }
 
 //Knight pseudo-move generator
-void MoveGenerator::generateKnightMoves(
-    Board& board,
-    int row,
-    int col,
-    std::vector<Move>& moves)
+void MoveGenerator::generateKnightMoves(Board& board,int row,int col,std::vector<Move>& moves)
 {
     char piece = board.getPiece(row, col);
 
@@ -390,11 +402,7 @@ void MoveGenerator::generateKnightMoves(
 }
 
 // Bishop + Queen diagonal pseudo-legal moves
-void MoveGenerator::generateBishopMoves(
-    Board& board,
-    int row,
-    int col,
-    std::vector<Move>& moves)
+void MoveGenerator::generateBishopMoves(Board& board,int row,int col,std::vector<Move>& moves)
 {
     char piece = board.getPiece(row, col);
 
@@ -456,11 +464,7 @@ void MoveGenerator::generateBishopMoves(
 
 
 // Rook + Queen straight pseudo-legal moves
-void MoveGenerator::generateRookMoves(
-    Board& board,
-    int row,
-    int col,
-    std::vector<Move>& moves)
+void MoveGenerator::generateRookMoves(Board& board,int row,int col,std::vector<Move>& moves)
 {
     char piece = board.getPiece(row, col);
 
@@ -520,11 +524,7 @@ void MoveGenerator::generateRookMoves(
     }
 }
 //Queen pseudo-legal moves
-void MoveGenerator::generateQueenMoves(
-    Board& board,
-    int row,
-    int col,
-    std::vector<Move>& moves)
+void MoveGenerator::generateQueenMoves(Board& board,int row,int col,std::vector<Move>& moves)
 {
     char piece = board.getPiece(row, col);
 
@@ -536,11 +536,7 @@ void MoveGenerator::generateQueenMoves(
 }
 
 //King pseudo-legal moves
-void MoveGenerator::generateKingMoves(
-    Board& board,
-    int row,
-    int col,
-    std::vector<Move>& moves)
+void MoveGenerator::generateKingMoves(Board& board, int row, int col,std::vector<Move>& moves)
 {
     char piece = board.getPiece(row, col);
 
@@ -584,5 +580,18 @@ void MoveGenerator::generateKingMoves(
             Move(row, col, newRow, newCol)
         );
     }
-}
 
+    // Castling (king moves two squares toward a rook)
+    Move kingSideCastle(row, col, row, col + 2);
+    Move queenSideCastle(row, col, row, col - 2);
+
+    if (board.isValidCastle(kingSideCastle))
+    {
+        moves.push_back(kingSideCastle);
+    }
+
+    if (board.isValidCastle(queenSideCastle))
+    {
+        moves.push_back(queenSideCastle);
+    }
+}

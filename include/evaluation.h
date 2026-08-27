@@ -36,6 +36,7 @@ public:
     static int evaluateProtectedPassedPawns(const Board& board);
     static int evaluateConnectedPassedPawns(const Board& board);
     static int evaluatePawnAdvancement(const Board& board);
+    static int evaluateCastling(Board& board, int phase);
 
 private:
     static int getPieceValue(char piece);

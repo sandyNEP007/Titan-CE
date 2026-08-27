@@ -15,13 +15,7 @@ public:
 
     Move();
 
-    Move(
-        int fromRow,
-        int fromCol,
-        int toRow,
-        int toCol,
-        char promotion = '\0'
-    );
+    Move(int fromRow, int fromCol, int toRow, int toCol, char promotion = '\0');
     bool operator==(const Move& other) const;
     static Move parseMove(const std::string& input);
 };

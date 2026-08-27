@@ -6,13 +6,11 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <cctype>
+#include "move.h"
 
 Board UCI::board;
 
-
-// ============================================================
-// PRINT MOVE
-// ============================================================
 
 void UCI::printMove(const Move& move)
 {
@@ -27,14 +25,11 @@ void UCI::printMove(const Move& move)
 
     if (move.promotion != '\0')
     {
-        std::cout << move.promotion;
+        std::cout << static_cast<char>(
+            std::tolower(static_cast<unsigned char>(move.promotion))
+        );
     }
 }
-
-
-// ============================================================
-// APPLY UCI MOVE
-// ============================================================
 
 bool UCI::applyMove(const std::string& moveString)
 {
@@ -116,9 +111,6 @@ bool UCI::loadFEN(const std::string& fen)
     int row = 0;
     int col = 0;
 
-    // --------------------------------------------------------
-    // Parse board layout
-    // --------------------------------------------------------
 
     for (char c : boardPart)
     {
@@ -156,11 +148,6 @@ bool UCI::loadFEN(const std::string& fen)
     if (row != 7 || col != 8)
         return false;
 
-
-    // --------------------------------------------------------
-    // Side to move
-    // --------------------------------------------------------
-
     if (sidePart == "w")
     {
         board.whiteTurn = true;
@@ -174,39 +161,8 @@ bool UCI::loadFEN(const std::string& fen)
         return false;
     }
 
-
-    /*
-        The current Board interface does not expose setters for:
-
-            castling rights
-            en-passant square
-            halfmove clock
-            fullmove number
-
-        For normal positions supplied by En Croissant this is
-        currently sufficient.
-
-        Your Board constructor already initializes the normal
-        starting castling state.
-    */
-
     return true;
 }
-
-
-// ============================================================
-// HANDLE POSITION
-//
-// Supported:
-//
-// position startpos
-//
-// position startpos moves e2e4 e7e5
-//
-// position fen <FEN>
-//
-// position fen <FEN> moves e2e4 e7e5
-// ============================================================
 
 void UCI::handlePosition(const std::string& command)
 {
@@ -219,11 +175,6 @@ void UCI::handlePosition(const std::string& command)
 
     // Read "startpos" or "fen"
     ss >> token;
-
-
-    // ========================================================
-    // STARTPOS
-    // ========================================================
 
     if (token == "startpos")
     {
@@ -253,11 +204,6 @@ void UCI::handlePosition(const std::string& command)
 
         return;
     }
-
-
-    // ========================================================
-    // FEN
-    // ========================================================
 
     if (token == "fen")
     {
@@ -301,11 +247,6 @@ void UCI::handlePosition(const std::string& command)
             return;
         }
 
-
-        // ----------------------------------------------------
-        // Optional moves after FEN
-        // ----------------------------------------------------
-
         if (!(ss >> token))
             return;
 
@@ -336,83 +277,59 @@ void UCI::handlePosition(const std::string& command)
         << "info string Unsupported position type\n";
 }
 
-
-// ============================================================
-// HANDLE GO
-// ============================================================
-
 void UCI::handleGo(const std::string& command)
 {
     std::stringstream ss(command);
-
     std::string token;
-
-    // Skip "go"
-    ss >> token;
+    ss >> token; // "go"
 
     int depth = 7;
+    long long movetime = 0;
+    long long wtime = 0, btime = 0, winc = 0, binc = 0;
+    bool hasMovetime = false;
+    bool hasClock = false;
 
     while (ss >> token)
     {
-        if (token == "depth")
-        {
-            ss >> depth;
-
-            if (depth < 1)
-                depth = 1;
-        }
+        if (token == "depth")        { ss >> depth; if (depth < 1) depth = 1; }
+        else if (token == "movetime"){ ss >> movetime; hasMovetime = true; }
+        else if (token == "wtime")   { ss >> wtime; hasClock = true; }
+        else if (token == "btime")   { ss >> btime; hasClock = true; }
+        else if (token == "winc")    { ss >> winc; }
+        else if (token == "binc")    { ss >> binc; }
     }
 
-    /*
-        Use the depth requested by the GUI.
+    long long timeLimitMs = 0;
 
-        En Croissant may send:
+    if (hasMovetime)
+    {
+        timeLimitMs = movetime - 50;   // small safety margin
+    }
+    else if (hasClock)
+    {
+        long long myTime = board.isWhiteTurn() ? wtime : btime;
+        long long myInc  = board.isWhiteTurn() ? winc  : binc;
 
-            go depth 7
-            go depth 12
-            go depth 24
+        timeLimitMs = myTime / 30 + myInc - 50;   // simple fixed-fraction allocation
+    }
 
-        The search engine receives that value directly.
-    */
+    if ((hasMovetime || hasClock) && timeLimitMs < 50)
+        timeLimitMs = 50;
 
-    Move bestMove =
-        EngineSearch::findBestMove(board, 7);
+    Move bestMove = EngineSearch::findBestMove(board, 6, timeLimitMs);
 
     std::cout << "bestmove ";
-
     printMove(bestMove);
-
     std::cout << "\n";
-
-    // Make sure the GUI receives the response immediately.
     std::cout.flush();
 }
 
-
-// ============================================================
-// HANDLE SETOPTION
-// ============================================================
-
 void UCI::handleSetOption(const std::string& command)
 {
-    /*
-        En Croissant currently sends:
-
-        setoption name UCI_Chess960 value false
-
-        Titan does not support Chess960 yet.
-
-        We simply accept the command so that the UCI
-        communication remains clean.
-    */
+   
 
     (void)command;
 }
-
-
-// ============================================================
-// MAIN UCI LOOP
-// ============================================================
 
 void UCI::loop()
 {
@@ -423,24 +340,17 @@ void UCI::loop()
         if (command.empty())
             continue;
 
-
-        // ====================================================
-        // UCI
-        // ====================================================
-
         if (command == "uci")
         {
             std::cout << "id name Titan-CE\n";
             std::cout << "id author Sandeep Poudel\n";
+            std::cout << "option name UCI_LimitStrength type check default false\n";
+            std::cout << "option name UCI_Elo type spin default 1400 min 100 max 4000\n";
+
             std::cout << "uciok\n";
 
             std::cout.flush();
         }
-
-
-        // ====================================================
-        // ISREADY
-        // ====================================================
 
         else if (command == "isready")
         {
@@ -450,20 +360,11 @@ void UCI::loop()
         }
 
 
-        // ====================================================
-        // SETOPTION
-        // ====================================================
-
         else if (
             command.rfind("setoption", 0) == 0)
         {
             handleSetOption(command);
         }
-
-
-        // ====================================================
-        // NEW GAME
-        // ====================================================
 
         else if (command == "ucinewgame")
         {
@@ -471,9 +372,6 @@ void UCI::loop()
         }
 
 
-        // ====================================================
-        // POSITION
-        // ====================================================
 
         else if (
             command.rfind("position", 0) == 0)
@@ -481,36 +379,16 @@ void UCI::loop()
             handlePosition(command);
         }
 
-
-        // ====================================================
-        // GO
-        // ====================================================
-
         else if (
             command.rfind("go", 0) == 0)
         {
             handleGo(command);
         }
 
-
-        // ====================================================
-        // STOP
-        // ====================================================
-
         else if (command == "stop")
         {
-            /*
-                Stop is not implemented yet.
-
-                Your current search is synchronous, so the engine
-                cannot interrupt findBestMove() yet.
-            */
+           
         }
-
-
-        // ====================================================
-        // QUIT
-        // ====================================================
 
         else if (command == "quit")
         {

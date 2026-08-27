@@ -31,6 +31,9 @@ Board :: Board(){
 
     blackLeftRookMoved = false;
     blackRightRookMoved = false;
+    whiteHasCastle = false;
+    blackHasCastle = false;
+
     zobristHash = Zobrist::generateHash(*this);
     
 }
@@ -681,17 +684,15 @@ void Board::makeMove(const Move& move)
     undo.whiteKingMoved = whiteKingMoved;
     undo.blackKingMoved = blackKingMoved;
 
-    undo.whiteLeftRookMoved =
-        whiteLeftRookMoved;
+    undo.whiteLeftRookMoved = whiteLeftRookMoved;
 
-    undo.whiteRightRookMoved =
-        whiteRightRookMoved;
+    undo.whiteRightRookMoved = whiteRightRookMoved;
 
-    undo.blackLeftRookMoved =
-        blackLeftRookMoved;
+    undo.blackLeftRookMoved = blackLeftRookMoved;
 
-    undo.blackRightRookMoved =
-        blackRightRookMoved;
+    undo.blackRightRookMoved = blackRightRookMoved;
+    undo.previousWhiteHasCastled = whiteHasCastle;
+    undo.previousBlackHasCastled = blackHasCastle;
 
     undo.wasCastling = false;
     undo.wasEnPassant = false;
@@ -705,31 +706,25 @@ void Board::makeMove(const Move& move)
 
     history.push_back(undo);
 
-    int oldCastlingRights =
-        getCastlingRights(*this);
+    int oldCastlingRights = getCastlingRights(*this);
 
-    int oldEpSquare =
-        getEnPassantSquare();
+    int oldEpSquare = getEnPassantSquare();
 
     // Remove old castling rights
     zobristHash ^=
-        Zobrist::getCastlingKey(
-            oldCastlingRights);
+        Zobrist::getCastlingKey(oldCastlingRights);
 
     // Remove old en-passant state
     if (oldEpSquare != -1)
     {
-        zobristHash ^=
-            Zobrist::getEnPassantKey(
+        zobristHash ^= Zobrist::getEnPassantKey(
                 oldEpSquare);
     }
 
     // Remove old side-to-move
-    zobristHash ^=
-        Zobrist::getSideKey();
+    zobristHash ^= Zobrist::getSideKey();
 
-    char movedPiece =
-        board[move.fromRow][move.fromCol];
+    char movedPiece = board[move.fromRow][move.fromCol];
 
     bool isCastling = false;
     bool isEnPassant = false;
@@ -826,23 +821,13 @@ history.back().wasCastling = isCastling;
             move.toCol == 6)
         {
             // Remove rook from old square
-            removePieceHash(
-                zobristHash,
-                'R',
-                7,
-                7);
+            removePieceHash(zobristHash,'R',7,7);
 
             // Add king to g1
-            zobristHash ^=
-                Zobrist::getPieceKey(
-                    'K',
-                    7 * 8 + 6);
+            zobristHash ^=Zobrist::getPieceKey('K',7 * 8 + 6);
 
             // Add rook to f1
-            zobristHash ^=
-                Zobrist::getPieceKey(
-                    'R',
-                    7 * 8 + 5);
+            zobristHash ^= Zobrist::getPieceKey('R', 7 * 8 + 5);
 
             board[7][4] = '.';
             board[7][6] = 'K';
@@ -852,26 +837,17 @@ history.back().wasCastling = isCastling;
 
             whiteKingMoved = true;
             whiteRightRookMoved = true;
+            whiteHasCastle = true;
         }
 
         else if (movedPiece == 'K' &&
                  move.toCol == 2)
         {
-            removePieceHash(
-                zobristHash,
-                'R',
-                7,
-                0);
+            removePieceHash(zobristHash,'R',7,0);
 
-            zobristHash ^=
-                Zobrist::getPieceKey(
-                    'K',
-                    7 * 8 + 2);
+            zobristHash ^=Zobrist::getPieceKey('K',7 * 8 + 2);
 
-            zobristHash ^=
-                Zobrist::getPieceKey(
-                    'R',
-                    7 * 8 + 3);
+            zobristHash ^=Zobrist::getPieceKey('R', 7 * 8 + 3);
 
             board[7][4] = '.';
             board[7][2] = 'K';
@@ -881,6 +857,7 @@ history.back().wasCastling = isCastling;
 
             whiteKingMoved = true;
             whiteLeftRookMoved = true;
+            whiteHasCastle = true;
         }
 
        
@@ -912,6 +889,7 @@ history.back().wasCastling = isCastling;
 
             blackKingMoved = true;
             blackRightRookMoved = true;
+            blackHasCastle = true;
         }
 
        
@@ -931,6 +909,7 @@ history.back().wasCastling = isCastling;
 
             blackKingMoved = true;
             blackLeftRookMoved = true;
+            blackHasCastle = true;
         }
 
         lastMove = move;
@@ -1001,32 +980,23 @@ if (move.promotion != '\0')
         
         // Add moving piece at new square
         zobristHash ^=
-    Zobrist::getPieceKey(
-        pieceToPlace,
-        move.toRow * 8 +
-        move.toCol);
+    Zobrist::getPieceKey(pieceToPlace,move.toRow * 8 +move.toCol);
 
         lastMove = move;
         whiteTurn = !whiteTurn;
     }
 
-    int newCastlingRights =
-        getCastlingRights(*this);
+    int newCastlingRights = getCastlingRights(*this);
 
-    int newEpSquare =
-        getEnPassantSquare();
+    int newEpSquare = getEnPassantSquare();
 
     // Add new castling rights
-    zobristHash ^=
-        Zobrist::getCastlingKey(
-            newCastlingRights);
+    zobristHash ^= Zobrist::getCastlingKey(newCastlingRights);
 
     // Add new en-passant state
     if (newEpSquare != -1)
     {
-        zobristHash ^=
-            Zobrist::getEnPassantKey(
-                newEpSquare);
+        zobristHash ^= Zobrist::getEnPassantKey(newEpSquare);
     }
 
     // Add new side-to-move
@@ -1057,7 +1027,8 @@ void Board::undoMove()
     blackLeftRookMoved = undo.blackLeftRookMoved;
 
     blackRightRookMoved = undo.blackRightRookMoved;
-
+    whiteHasCastle = undo.previousWhiteHasCastled;
+    blackHasCastle= undo.previousBlackHasCastled;
 
     if (undo.wasCastling)
 {
@@ -1137,7 +1108,26 @@ zobristHash =
 
 
 }
+void Board::makeNullMove()
+{
+    nullMoveHistory.push_back({ lastMove, zobristHash });
 
+    int epSquare = getEnPassantSquare();
+    if (epSquare != -1)
+        zobristHash ^= Zobrist::getEnPassantKey(epSquare);
+
+    lastMove = Move();               // clears en-passant eligibility
+    zobristHash ^= Zobrist::getSideKey();
+    whiteTurn = !whiteTurn;
+}
+
+void Board::undoNullMove()
+{
+    whiteTurn = !whiteTurn;
+    lastMove = nullMoveHistory.back().first;
+    zobristHash = nullMoveHistory.back().second;
+    nullMoveHistory.pop_back();
+}
 
 bool Board::isValidCastle(const Move& move)
 {
@@ -1159,6 +1149,9 @@ bool Board::isValidCastle(const Move& move)
 
             // h1 rook must not have moved
             if (whiteRightRookMoved)
+                return false;
+
+            if (board[7][7] != 'R')
                 return false;
 
             // f1 and g1 must be empty
@@ -1187,6 +1180,9 @@ bool Board::isValidCastle(const Move& move)
 
             // a1 rook must not have moved
             if (whiteLeftRookMoved)
+                return false;
+
+            if (board[7][0] != 'R')
                 return false;
 
             // b1, c1 and d1 must be empty
@@ -1221,6 +1217,8 @@ bool Board::isValidCastle(const Move& move)
             if (blackRightRookMoved)
                 return false;
 
+            if (board[0][7] != 'r')
+                return false;
             // f8 and g8 must be empty
             if (board[0][5] != '.' ||
                 board[0][6] != '.')
@@ -1246,6 +1244,9 @@ bool Board::isValidCastle(const Move& move)
 
             // a8 rook must not have moved
             if (blackLeftRookMoved)
+                return false;
+
+            if (board[0][0] != 'r')
                 return false;
 
             // b8, c8 and d8 must be empty
@@ -1300,8 +1301,10 @@ bool Board::hasLegalMove(bool white)
                 {
                     Move move(fromRow, fromCol, toRow, toCol);
 
-                    if (isValidMove(move))
-                        return true;
+                    if (isValidMove(move)){
+                         whiteTurn = oldTurn;
+                         return true;
+                    }
                 }
             }
         }
