@@ -176,7 +176,7 @@ int Evaluation ::boardEvaluation(Board& board)
         score += evaluateProtectedPassedPawns(board);
         score += evaluateConnectedPassedPawns(board);
         score += evaluatePawnAdvancement(board);
-
+        score += evaluateCastling(board, phase);
 
     return score;
 }
@@ -733,10 +733,6 @@ int Evaluation::evaluateKingMobility(Board& board, int phase)
     constexpr int KING_MOBILITY_BONUS = 4;
 
     int score = 0;
-
-    // Only apply this strongly in the middlegame.
-    // phase = 24 → full bonus
-    // phase = 0  → no bonus
     int mobilityWeight = phase;
 
     for (int row = 0; row < 8; row++)
@@ -778,12 +774,7 @@ int Evaluation::evaluateKingMobility(Board& board, int phase)
                     continue;
 
                 // King cannot move onto an attacked square.
-                Move kingMove(
-                    row,
-                    col,
-                    newRow,
-                    newCol
-                );
+                Move kingMove(row, col, newRow, newCol);
 
                 board.makeMove(kingMove);
                 bool illegal = board.isKingInCheck(whiteKing);
@@ -1278,19 +1269,7 @@ int Evaluation::evaluateOpposition(const Board& board, int endgamePhase)
     if (whiteKingCol == blackKingCol &&
         abs(whiteKingRow - blackKingRow) == 2)
     {
-        /*
-            Example:
-
-                Black king
-                    k
-                    .
-                    K
-                White king
-
-            Exactly one square between them.
-        */
-
-        // Determine whose turn it is.
+       
         if (board.isWhiteTurn())
             score -= OPPOSITION_BONUS;
         else
@@ -1369,9 +1348,7 @@ int Evaluation::evaluateRookFiles(const Board& board, int phase)
                 bonus = SEMI_OPEN_FILE_BONUS;
             }
 
-            // Phase scaling:
-            // Open-file rook activity remains useful,
-            // but becomes even more relevant later.
+           
             int weight = 24 - phase;
 
             int scaledBonus =
@@ -1419,9 +1396,7 @@ int Evaluation::evaluateRookSeventhRank(const Board& board, int phase)
                 row == 1 &&
                 blackPawnOnSeventh)
             {
-                int bonus =
-                    (SEVENTH_RANK_BONUS * (24 - phase))
-                    / 24;
+                int bonus = (SEVENTH_RANK_BONUS * (24 - phase)) / 24;
 
                 score += bonus;
             }
@@ -1431,10 +1406,7 @@ int Evaluation::evaluateRookSeventhRank(const Board& board, int phase)
                 row == 6 &&
                 whitePawnOnSecond)
             {
-                int bonus =
-                    (SEVENTH_RANK_BONUS * (24 - phase))
-                    / 24;
-
+                int bonus = (SEVENTH_RANK_BONUS * (24 - phase))/ 24;
                 score -= bonus;
             }
         }
@@ -1534,19 +1506,7 @@ int Evaluation::evaluateRookBehindPassedPawn(const Board& board, int endgamePhas
             if (pawn == 'P' &&
                 isPassedPawn(board, row, col, true))
             {
-                /*
-                    White pawns move toward row 0.
 
-                    Therefore the rook is behind the pawn
-                    when it is on a larger row number.
-
-                    Example:
-
-                        R
-                        P
-
-                    Rook row > pawn row.
-                */
 
                 for (int rookRow = row + 1;
                      rookRow < 8;
@@ -1589,19 +1549,6 @@ int Evaluation::evaluateRookBehindPassedPawn(const Board& board, int endgamePhas
             else if (pawn == 'p' &&
                      isPassedPawn(board, row, col, false))
             {
-                /*
-                    Black pawns move toward row 7.
-
-                    Therefore the rook is behind the pawn
-                    when it is on a smaller row number.
-
-                    Example:
-
-                        p
-                        r
-
-                    Black rook row < pawn row.
-                */
 
                 for (int rookRow = row - 1;
                      rookRow >= 0;
@@ -1753,13 +1700,10 @@ int Evaluation::evaluateRookMobility(Board& board, int phase)
                 }
             }
 
-            int bonus =
-                mobility * MOBILITY_BONUS;
+            int bonus = mobility * MOBILITY_BONUS;
 
             bonus += usefulBonus;
 
-            // Rook activity becomes slightly more valuable
-            // as material disappears.
             int endgameWeight = 24 - phase;
 
             bonus +=
@@ -1947,10 +1891,6 @@ int Evaluation::evaluateGoodBadBishop(const Board& board, int phase)
             if (totalFriendlyPawns == 0)
                 continue;
 
-            /*
-                More friendly pawns on the bishop's
-                color = greater chance of a bad bishop.
-            */
 
             if (sameColorPawns >= 3)
             {
@@ -2048,8 +1988,6 @@ int Evaluation::evaluateBishopLongDiagonal(Board& board, int phase)
 
                     length++;
 
-                    // Enemy piece can be attacked,
-                    // but blocks squares beyond it.
                     if (destination != '.')
                         break;
 
@@ -2060,14 +1998,6 @@ int Evaluation::evaluateBishopLongDiagonal(Board& board, int phase)
                 if (length > longestDiagonal)
                     longestDiagonal = length;
             }
-
-            /*
-                A bishop with access to a long diagonal
-                has greater positional influence.
-
-                5+ accessible squares = meaningful
-                long diagonal.
-            */
 
             if (longestDiagonal >= 5)
             {
@@ -2205,16 +2135,6 @@ int Evaluation::evaluateKnightCentralization(const Board& board, int endgamePhas
 
             bool whiteKnight = (knight == 'N');
 
-            /*
-                Distance from the four central squares.
-
-                Board coordinates:
-                    d4 = row 4, col 3
-                    e4 = row 4, col 4
-                    d5 = row 3, col 3
-                    e5 = row 3, col 4
-            */
-
             int distanceToCenter =
                 std::min(
                     std::min(
@@ -2261,9 +2181,7 @@ int Evaluation::evaluateKnightCentralization(const Board& board, int endgamePhas
     return score;
 }
 
-int Evaluation::evaluatePawnStructure(
-    const Board& board,
-    int endgamePhase)
+int Evaluation::evaluatePawnStructure(const Board& board, int endgamePhase)
 {
     constexpr int DOUBLED_PAWN_PENALTY = 10;
     constexpr int ISOLATED_PAWN_PENALTY = 12;
@@ -2292,16 +2210,12 @@ int Evaluation::evaluatePawnStructure(
     {
         if (whitePawnsOnFile[col] > 1)
         {
-            score -=
-                (whitePawnsOnFile[col] - 1)
-                * DOUBLED_PAWN_PENALTY;
+            score -= (whitePawnsOnFile[col] - 1) * DOUBLED_PAWN_PENALTY;
         }
 
         if (blackPawnsOnFile[col] > 1)
         {
-            score +=
-                (blackPawnsOnFile[col] - 1)
-                * DOUBLED_PAWN_PENALTY;
+            score += (blackPawnsOnFile[col] - 1) * DOUBLED_PAWN_PENALTY;
         }
     }
 
@@ -2361,12 +2275,6 @@ int Evaluation::evaluateProtectedPassedPawns(const Board& board)
             if (pawn == 'P' &&
                 isPassedPawn(board, row, col, true))
             {
-                /*
-                    White moves toward row 0.
-
-                    A supporting pawn must be one row
-                    behind the passed pawn.
-                */
 
                 int supportRow = row + 1;
 
@@ -2383,16 +2291,13 @@ int Evaluation::evaluateProtectedPassedPawns(const Board& board)
                     }
 
                     if (col < 7 &&
-                        board.getPiece(
-                            supportRow,
-                            col + 1) == 'P')
+                        board.getPiece(supportRow, col + 1) == 'P')
                     {
                         protectedPawn = true;
                     }
 
                     if (protectedPawn)
-                        score +=
-                            PROTECTED_PASSED_PAWN_BONUS;
+                        score += PROTECTED_PASSED_PAWN_BONUS;
                 }
             }
 
@@ -2400,18 +2305,8 @@ int Evaluation::evaluateProtectedPassedPawns(const Board& board)
             // BLACK
             // -------------------------------------------------
 
-            else if (pawn == 'p' &&
-                     isPassedPawn(
-                         board,
-                         row,
-                         col,
-                         false))
+            else if (pawn == 'p' &&isPassedPawn(board,row, col, false))
             {
-                /*
-                    Black moves toward row 7.
-
-                    Supporting pawn is one row behind.
-                */
 
                 int supportRow = row - 1;
 
@@ -2446,8 +2341,7 @@ int Evaluation::evaluateProtectedPassedPawns(const Board& board)
     return score;
 }
 
-int Evaluation::evaluateConnectedPassedPawns(
-    const Board& board)
+int Evaluation::evaluateConnectedPassedPawns(const Board& board)
 {
     constexpr int CONNECTED_PASSED_PAWN_BONUS = 18;
 
@@ -2466,24 +2360,14 @@ int Evaluation::evaluateConnectedPassedPawns(
 
             if (pawn1 == 'P' && pawn2 == 'P')
             {
-                bool pawn1Passed =
-                    isPassedPawn(
-                        board,
-                        row,
-                        col,
-                        true);
+                bool pawn1Passed = isPassedPawn(board, row, col, true);
 
                 bool pawn2Passed =
-                    isPassedPawn(
-                        board,
-                        row,
-                        col + 1,
-                        true);
+                    isPassedPawn(board, row, col + 1, true);
 
                 if (pawn1Passed && pawn2Passed)
                 {
-                    score +=
-                        CONNECTED_PASSED_PAWN_BONUS;
+                    score += CONNECTED_PASSED_PAWN_BONUS;
                 }
             }
 
@@ -2493,24 +2377,12 @@ int Evaluation::evaluateConnectedPassedPawns(
 
             else if (pawn1 == 'p' && pawn2 == 'p')
             {
-                bool pawn1Passed =
-                    isPassedPawn(
-                        board,
-                        row,
-                        col,
-                        false);
+                bool pawn1Passed =isPassedPawn(board, row, col, false);
 
-                bool pawn2Passed =
-                    isPassedPawn(
-                        board,
-                        row,
-                        col + 1,
-                        false);
-
+                bool pawn2Passed =isPassedPawn(board, row, col + 1, false);
                 if (pawn1Passed && pawn2Passed)
                 {
-                    score -=
-                        CONNECTED_PASSED_PAWN_BONUS;
+                    score -= CONNECTED_PASSED_PAWN_BONUS;
                 }
             }
         }
@@ -2532,21 +2404,9 @@ int Evaluation::evaluatePawnAdvancement(
         {
             char pawn = board.getPiece(row, col);
 
-            // -------------------------------------------------
-            // WHITE PASSED PAWN
-            // -------------------------------------------------
-
             if (pawn == 'P' &&
                 isPassedPawn(board, row, col, true))
             {
-                /*
-                    White promotes on row 0.
-
-                    rank 2 -> strong
-                    rank 3 -> moderate
-                    rank 4 -> smaller
-                    etc.
-                */
 
                 int rank = 8 - row;
 
@@ -2567,10 +2427,6 @@ int Evaluation::evaluatePawnAdvancement(
 
                 score += bonus;
             }
-
-            // -------------------------------------------------
-            // BLACK PASSED PAWN
-            // -------------------------------------------------
 
             else if (pawn == 'p' &&
                      isPassedPawn(
@@ -2600,6 +2456,21 @@ int Evaluation::evaluatePawnAdvancement(
             }
         }
     }
+
+    return score;
+}
+
+int Evaluation::evaluateCastling(Board& board, int phase)
+{
+       constexpr int CASTLING_BONUS = 40;
+       int score = 0;
+       int bonus = (CASTLING_BONUS * phase) / 24;
+
+    if (board.hasWhiteCastled())
+        score += bonus;
+
+    if (board.hasBlackCastled())
+        score -= bonus;
 
     return score;
 }

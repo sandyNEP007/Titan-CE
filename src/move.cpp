@@ -1,4 +1,5 @@
 #include "move.h"
+#include <cctype>
 
 Move::Move()
 {
@@ -37,16 +38,10 @@ Move Move::parseMove(const std::string& input)
 
     if (input.length() >= 5)
     {
-        promotion = input[4];
+        promotion = std::toupper(input[4]);      
     }
 
-    return Move(
-        fromRow,
-        fromCol,
-        toRow,
-        toCol,
-        promotion
-    );
+    return Move(fromRow, fromCol, toRow, toCol, promotion);
 }
 bool Move::operator==(const Move& other) const
 {

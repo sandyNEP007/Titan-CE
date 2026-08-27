@@ -18,6 +18,8 @@ struct UndoInfo
 
     bool blackLeftRookMoved;
     bool blackRightRookMoved;
+    bool whiteHasCastle;
+    bool blackHasCastle;
 
     bool wasCastling;
     bool previousWhiteTurn;
@@ -27,6 +29,8 @@ struct UndoInfo
     char enPassantCapturedPiece;
     int enPassantCapturedRow;
     int enPassantCapturedCol;
+    bool previousBlackHasCastled;
+    bool previousWhiteHasCastled;
        
 };
 
@@ -44,7 +48,9 @@ private:
 
     bool blackLeftRookMoved;
     bool blackRightRookMoved;
-    
+    bool whiteHasCastle;
+    bool blackHasCastle;
+    std::vector<std::pair<Move, uint64_t>> nullMoveHistory;
 
 public:
     Board();
@@ -55,6 +61,16 @@ public:
     bool isWhiteTurn() const
 {
     return whiteTurn;
+}
+
+bool hasWhiteCastled() const
+{
+    return whiteHasCastle;
+}
+
+bool hasBlackCastled() const
+{
+    return blackHasCastle;
 }
     bool whiteTurn;
     bool isWhitePiece(char piece);
@@ -74,6 +90,8 @@ public:
     bool isStalemate(bool white);
     void makeMove(const Move& move);
     void undoMove();
+    void makeNullMove();
+    void undoNullMove();
     void setPiece(int row, int col, char piece);
     bool canWhiteKingSideCastle() const;
     bool canWhiteQueenSideCastle() const;
