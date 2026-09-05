@@ -60,6 +60,10 @@ This project is being developed step by step to understand the internal architec
 * [x] Null Move Pruning
 * [x] UCI Protocol
 * [x] Graphical User Interface
+* [x] Futility prunning 
+* [x] Implemented check extension
+* [x] Null move reduction 
+* [x] Late move reduction
 * [ ] NNUE Evaluation [undergoing...]
 
 ---
