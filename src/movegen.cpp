@@ -50,43 +50,205 @@ std::vector<Move> MoveGenerator::generateLegalMoves(Board& board)
         }
     }
 
-    // Remove moves that leave our own king in check
+    // ---- Find own king ----
+    char kingChar = movingSide ? 'K' : 'k';
+    int kingRow = -1, kingCol = -1;
+
+    for (int r = 0; r < 8 && kingRow == -1; r++)
+    {
+        for (int c = 0; c < 8; c++)
+        {
+            if (board.getPiece(r, c) == kingChar)
+            {
+                kingRow = r;
+                kingCol = c;
+                break;
+            }
+        }
+    }
+
+    if (kingRow == -1)
+        return legalMoves;
+
+    // ---- Single ray-walk from the king: finds sliding checkers AND
+    //      pinned pieces in one pass (a pin is: friendly piece, then an
+    //      enemy slider of the matching type, with nothing in between). ----
+    struct PinInfo { int row, col, dRow, dCol; };
+    std::vector<PinInfo> pinned;
+    std::vector<std::pair<int,int>> checkerSquares;
+    std::vector<std::pair<int,int>> blockSquares;
+
+    const int diagDirs[4][2] = { {-1,-1},{-1,1},{1,-1},{1,1} };
+    const int straightDirs[4][2] = { {-1,0},{1,0},{0,-1},{0,1} };
+
+    auto walkRay = [&](int dRow, int dCol, bool diagonal)
+    {
+        char enemySlider1 = movingSide ? (diagonal ? 'b' : 'r') : (diagonal ? 'B' : 'R');
+        char enemyQueen   = movingSide ? 'q' : 'Q';
+
+        int r = kingRow + dRow;
+        int c = kingCol + dCol;
+
+        std::vector<std::pair<int,int>> raySoFar;
+        bool foundFriendly = false;
+        int friendlyRow = -1, friendlyCol = -1;
+
+        while (r >= 0 && r < 8 && c >= 0 && c < 8)
+        {
+            char piece = board.getPiece(r, c);
+
+            if (piece == '.')
+            {
+                raySoFar.push_back({r, c});
+                r += dRow;
+                c += dCol;
+                continue;
+            }
+
+            bool isEnemy = movingSide ? board.isBlackPiece(piece) : board.isWhitePiece(piece);
+
+            if (!foundFriendly)
+            {
+                if (!isEnemy)
+                {
+                    foundFriendly = true;
+                    friendlyRow = r;
+                    friendlyCol = c;
+                    r += dRow;
+                    c += dCol;
+                    continue;
+                }
+                else
+                {
+                    if (piece == enemySlider1 || piece == enemyQueen)
+                    {
+                        checkerSquares.push_back({r, c});
+                        blockSquares = raySoFar;
+                        blockSquares.push_back({r, c});
+                    }
+                    break;
+                }
+            }
+            else
+            {
+                if (isEnemy && (piece == enemySlider1 || piece == enemyQueen))
+                {
+                    pinned.push_back({friendlyRow, friendlyCol, dRow, dCol});
+                }
+                break;
+            }
+        }
+    };
+
+    for (auto& d : diagDirs)
+        walkRay(d[0], d[1], true);
+
+    for (auto& d : straightDirs)
+        walkRay(d[0], d[1], false);
+
+    // ---- Pawn / knight checks (non-sliding — checkers only, never pins) ----
+    char enemyPawn = movingSide ? 'p' : 'P';
+    int pawnRow = movingSide ? kingRow - 1 : kingRow + 1;
+
+    if (pawnRow >= 0 && pawnRow < 8)
+    {
+        if (kingCol - 1 >= 0 && board.getPiece(pawnRow, kingCol - 1) == enemyPawn)
+            checkerSquares.push_back({pawnRow, kingCol - 1});
+
+        if (kingCol + 1 < 8 && board.getPiece(pawnRow, kingCol + 1) == enemyPawn)
+            checkerSquares.push_back({pawnRow, kingCol + 1});
+    }
+
+    char enemyKnight = movingSide ? 'n' : 'N';
+    const int knightOffsets[8][2] = {
+        {-2,-1},{-2,1},{-1,-2},{-1,2},{1,-2},{1,2},{2,-1},{2,1}
+    };
+    for (auto& off : knightOffsets)
+    {
+        int r = kingRow + off[0], c = kingCol + off[1];
+        if (r >= 0 && r < 8 && c >= 0 && c < 8 &&
+            board.getPiece(r, c) == enemyKnight)
+        {
+            checkerSquares.push_back({r, c});
+        }
+    }
+
+    bool inDoubleCheck = checkerSquares.size() >= 2;
+    bool inSingleCheck = checkerSquares.size() == 1;
+
+    if (inSingleCheck && blockSquares.empty())
+        blockSquares.push_back(checkerSquares[0]);
+
+    // ---- Filter pseudo-legal moves ----
     for (const Move& move : pseudoLegalMoves)
     {
-        board.makeMove(move);
+        char movedPiece = board.getPiece(move.fromRow, move.fromCol);
+        bool isKingMove = (movedPiece == 'K' || movedPiece == 'k');
 
-        bool leavesKingInCheck = board.isKingInCheck(movingSide);
+        bool isEnPassantMove =
+            (movedPiece == 'P' || movedPiece == 'p') &&
+            move.fromCol != move.toCol &&
+            board.getPiece(move.toRow, move.toCol) == '.';
 
-        board.undoMove();
-
-        if (!leavesKingInCheck)
+        if (isKingMove || isEnPassantMove)
         {
-            legalMoves.push_back(move);
+            board.makeMove(move);
+            bool leavesKingInCheck = board.isKingInCheck(movingSide);
+            board.undoMove();
+
+            if (!leavesKingInCheck)
+                legalMoves.push_back(move);
+
+            continue;
         }
+
+        if (inDoubleCheck)
+            continue;
+
+        if (inSingleCheck)
+        {
+            bool resolvesCheck = false;
+            for (auto& sq : blockSquares)
+            {
+                if (sq.first == move.toRow && sq.second == move.toCol)
+                {
+                    resolvesCheck = true;
+                    break;
+                }
+            }
+            if (!resolvesCheck)
+                continue;
+        }
+
+        bool isPinned = false;
+        int pinDRow = 0, pinDCol = 0;
+
+        for (auto& p : pinned)
+        {
+            if (p.row == move.fromRow && p.col == move.fromCol)
+            {
+                isPinned = true;
+                pinDRow = p.dRow;
+                pinDCol = p.dCol;
+                break;
+            }
+        }
+
+        if (isPinned)
+        {
+            int dRow = move.toRow - move.fromRow;
+            int dCol = move.toCol - move.fromCol;
+            bool collinear = (dRow * pinDCol - dCol * pinDRow) == 0;
+
+            if (!collinear)
+                continue;
+        }
+
+        legalMoves.push_back(move);
     }
 
     return legalMoves;
 }
-
-void MoveGenerator::addPromotionMoves(int fromRow, int fromCol, int toRow, int toCol, std::vector<Move>& moves)
-{
-    moves.push_back(
-        Move(fromRow, fromCol, toRow, toCol, 'Q')
-    );
-
-    moves.push_back(
-        Move(fromRow, fromCol, toRow, toCol, 'R')
-    );
-
-    moves.push_back(
-        Move(fromRow, fromCol, toRow, toCol, 'B')
-    );
-
-    moves.push_back(
-        Move(fromRow, fromCol, toRow, toCol, 'N')
-    );
-}
-
 //Generating pseudo-legal move of pawn
 void MoveGenerator::generatePawnMoves(Board& board, int row, int col, std::vector<Move>& moves)
 {

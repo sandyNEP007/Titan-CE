@@ -15,10 +15,123 @@ using namespace std;
 
     hash ^= Zobrist::getPieceKey(piece, square);
 }
+int Board::pieceToIndex(char piece)
+{
+    switch (piece)
+    {
+        case 'P': return WP;
+        case 'N': return WN;
+        case 'B': return WB;
+        case 'R': return WR;
+        case 'Q': return WQ;
+        case 'K': return WK;
+        case 'p': return BP;
+        case 'n': return BN;
+        case 'b': return BB;
+        case 'r': return BR;
+        case 'q': return BQ;
+        case 'k': return BK;
+    }
+    return -1;
+}
 
+void Board::syncBitboards()
+{
+    for (int i = 0; i < 12; i++)
+        pieceBB[i] = 0ULL;
+
+    for (int row = 0; row < 8; row++)
+    {
+        for (int col = 0; col < 8; col++)
+        {
+            char piece = board[row][col];
+            int idx = pieceToIndex(piece);
+
+            if (idx != -1)
+            {
+                int square = row * 8 + col;
+                pieceBB[idx] |= (1ULL << square);
+            }
+        }
+    }
+
+    whiteOccupancy = pieceBB[WP] | pieceBB[WN] | pieceBB[WB] |
+                      pieceBB[WR] | pieceBB[WQ] | pieceBB[WK];
+
+    blackOccupancy = pieceBB[BP] | pieceBB[BN] | pieceBB[BB] |
+                      pieceBB[BR] | pieceBB[BQ] | pieceBB[BK];
+
+    allOccupancy = whiteOccupancy | blackOccupancy;
+}
+uint64_t Board::knightAttacks[64];
+uint64_t Board::kingAttacks[64];
+uint64_t Board::pawnAttacks[2][64];
+bool Board::attackTablesInitialized = false;
+
+void Board::initAttackTables()
+{
+    if (attackTablesInitialized)
+        return;
+
+    for (int square = 0; square < 64; square++)
+    {
+        int row = square / 8;
+        int col = square % 8;
+
+        // Knight
+        uint64_t knightBB = 0ULL;
+        const int knightOffsets[8][2] = {
+            {-2,-1},{-2,1},{-1,-2},{-1,2},{1,-2},{1,2},{2,-1},{2,1}
+        };
+        for (auto& off : knightOffsets)
+        {
+            int r = row + off[0], c = col + off[1];
+            if (r >= 0 && r < 8 && c >= 0 && c < 8)
+                knightBB |= (1ULL << (r * 8 + c));
+        }
+        knightAttacks[square] = knightBB;
+
+        // King
+        uint64_t kingBB = 0ULL;
+        for (int dr = -1; dr <= 1; dr++)
+        {
+            for (int dc = -1; dc <= 1; dc++)
+            {
+                if (dr == 0 && dc == 0)
+                    continue;
+
+                int r = row + dr, c = col + dc;
+                if (r >= 0 && r < 8 && c >= 0 && c < 8)
+                    kingBB |= (1ULL << (r * 8 + c));
+            }
+        }
+        kingAttacks[square] = kingBB;
+
+        // Pawns — white pawns attack toward row+1 (matches the existing
+        // isSquareAttacked logic: "white pawns attack upward" = row+1).
+        uint64_t whitePawnBB = 0ULL;
+        if (row + 1 < 8)
+        {
+            if (col - 1 >= 0) whitePawnBB |= (1ULL << ((row + 1) * 8 + col - 1));
+            if (col + 1 < 8)  whitePawnBB |= (1ULL << ((row + 1) * 8 + col + 1));
+        }
+        pawnAttacks[0][square] = whitePawnBB;
+
+        uint64_t blackPawnBB = 0ULL;
+        if (row - 1 >= 0)
+        {
+            if (col - 1 >= 0) blackPawnBB |= (1ULL << ((row - 1) * 8 + col - 1));
+            if (col + 1 < 8)  blackPawnBB |= (1ULL << ((row - 1) * 8 + col + 1));
+        }
+        pawnAttacks[1][square] = blackPawnBB;
+    }
+
+    attackTablesInitialized = true;
+}
 
 Board :: Board(){    
     Zobrist::initialize();
+    Board::initAttackTables();
     BoardInitialize();
     setPieces();
     whiteTurn = true;
@@ -35,6 +148,7 @@ Board :: Board(){
     blackHasCastle = false;
 
     zobristHash = Zobrist::generateHash(*this);
+    syncBitboards();
     
 }
 
@@ -489,87 +603,33 @@ bool Board::isKingInCheck(bool white)
 bool Board :: isSquareAttacked(int row, int col, bool byWhite)
 {   
     //Pawn attack
+     //Pawn attack — O(1) bitboard lookup instead of manual offset checks.
+    int square = row * 8 + col;
+
     if (byWhite)
     {
-        // White pawns attack upward
-        if (row + 1 < 8)
-        {
-            if (col - 1 >= 0 && board[row + 1][col - 1] == 'P')
-                return true;
-
-            if (col + 1 < 8 && board[row + 1][col + 1] == 'P')
-                return true;
-        }
+        if (pawnAttacks[0][square] & pieceBB[WP])
+            return true;
     }
     else
     {
-        // Black pawns attack downward
-        if (row - 1 >= 0)
-        {
-            if (col - 1 >= 0 && board[row - 1][col - 1] == 'p')
-                return true;
-
-            if (col + 1 < 8 && board[row - 1][col + 1] == 'p')
-                return true;
-        }
+        if (pawnAttacks[1][square] & pieceBB[BP])
+            return true;
     }
 
     // Knight attacks
-    char knight = byWhite ? 'N' : 'n';
+        // Knight attacks — O(1) bitboard lookup instead of an 8-way loop.
+    int targetSquare = row * 8 + col;
+    uint64_t enemyKnights = byWhite ? pieceBB[WN] : pieceBB[BN];
 
-const int knightMoves[8][2] =
-{
-    {-2, -1},
-    {-2,  1},
-    {-1, -2},
-    {-1,  2},
-    { 1, -2},
-    { 1,  2},
-    { 2, -1},
-    { 2,  1}
-};
+    if (knightAttacks[targetSquare] & enemyKnights)
+        return true;
 
-for (int i = 0; i < 8; i++)
-{
-    int attackRow = row + knightMoves[i][0];
-    int attackCol = col + knightMoves[i][1];
+    // King attacks — O(1) bitboard lookup instead of a 3x3 loop.
+    uint64_t enemyKingBB = byWhite ? pieceBB[WK] : pieceBB[BK];
 
-    if (attackRow >= 0 && attackRow < 8 &&
-        attackCol >= 0 && attackCol < 8)
-    {
-        if (board[attackRow][attackCol] == knight)
-        {
-            return true;
-        }
-    }
-}
-
-// King attacks
-char enemyKing = byWhite ? 'K' : 'k';
-
-for (int r = row - 1; r <= row + 1; r++)
-{
-    for (int c = col - 1; c <= col + 1; c++)
-    {
-        // Stay inside the board
-        if (r < 0 || r >= 8 ||
-            c < 0 || c >= 8)
-        {
-            continue;
-        }
-
-        // Don't check the square itself
-        if (r == row && c == col)
-        {
-            continue;
-        }
-
-        if (board[r][c] == enemyKing)
-        {
-            return true;
-        }
-    }
-}
+    if (kingAttacks[targetSquare] & enemyKingBB)
+        return true;
 
 //Bishop attack
 char bishop = byWhite ? 'B' : 'b';
@@ -1001,6 +1061,7 @@ if (move.promotion != '\0')
 
     // Add new side-to-move
     zobristHash ^= Zobrist::getSideKey();
+    syncBitboards();
 }
 void Board::undoMove()
 {
@@ -1103,9 +1164,8 @@ else
         undo.capturedPiece;
 }
 
-zobristHash =
-    undo.previousZobristHash;
-
+zobristHash = undo.previousZobristHash;
+syncBitboards();
 
 }
 void Board::makeNullMove()
@@ -1335,6 +1395,7 @@ char Board::getPiece(int row, int col) const
 void Board::setPiece(int row, int col, char piece)
 {
     board[row][col] = piece;
+     syncBitboards();
 }
 
 bool Board::canWhiteKingSideCastle() const

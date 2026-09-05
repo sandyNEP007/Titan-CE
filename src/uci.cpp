@@ -12,6 +12,12 @@
 Board UCI::board;
 
 
+void UCI::show()
+{
+    std::cout << "id name Titan-CE\n";
+    std::cout << "id author Sandeep Poudel\n";
+}
+
 void UCI::printMove(const Move& move)
 {
     char fromFile = 'a' + move.fromCol;
@@ -283,7 +289,7 @@ void UCI::handleGo(const std::string& command)
     std::string token;
     ss >> token; // "go"
 
-    int depth = 7;
+    int depth = 10;
     long long movetime = 0;
     long long wtime = 0, btime = 0, winc = 0, binc = 0;
     bool hasMovetime = false;
@@ -299,24 +305,27 @@ void UCI::handleGo(const std::string& command)
         else if (token == "binc")    { ss >> binc; }
     }
 
-    long long timeLimitMs = 0;
+        long long timeLimitMs = 0;
 
     if (hasMovetime)
-    {
-        timeLimitMs = movetime - 50;   // small safety margin
-    }
+        timeLimitMs = movetime - 50;
     else if (hasClock)
     {
         long long myTime = board.isWhiteTurn() ? wtime : btime;
         long long myInc  = board.isWhiteTurn() ? winc  : binc;
-
-        timeLimitMs = myTime / 30 + myInc - 50;   // simple fixed-fraction allocation
+        timeLimitMs = myTime / 30 + myInc - 50;
+    }
+    else
+    {
+        // No movetime/clock given (e.g. bare "go depth 10") — use a
+        // sensible default budget instead of running unbounded.
+        timeLimitMs = 40000 - 50;
     }
 
-    if ((hasMovetime || hasClock) && timeLimitMs < 50)
+    if (timeLimitMs < 50)
         timeLimitMs = 50;
 
-    Move bestMove = EngineSearch::findBestMove(board, 6, timeLimitMs);
+    Move bestMove = EngineSearch::findBestMove(board, 10, timeLimitMs);
 
     std::cout << "bestmove ";
     printMove(bestMove);
@@ -368,6 +377,7 @@ void UCI::loop()
 
         else if (command == "ucinewgame")
         {
+            EngineSearch::clearTranspositionTable();
             board = Board();
         }
 

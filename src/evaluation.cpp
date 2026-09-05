@@ -57,6 +57,29 @@ int Evaluation ::boardEvaluation(Board& board)
         phase = 24;
 
     int endgamePhase = 24 - phase;
+    int whiteKingRow = -1;
+    int whiteKingCol = -1;
+    int blackKingRow = -1;
+    int blackKingCol = -1;
+
+    for (int row = 0; row < 8; row++)
+    {
+        for (int col = 0; col < 8; col++)
+        {
+            char piece = board.getPiece(row, col);
+
+            if (piece == 'K')
+            {
+                whiteKingRow = row;
+                whiteKingCol = col;
+            }
+            else if (piece == 'k')
+            {
+                blackKingRow = row;
+                blackKingCol = col;
+            }
+        }
+    }
 
 
     // Evaluate every square
@@ -157,11 +180,19 @@ int Evaluation ::boardEvaluation(Board& board)
         score += evaluateKnightOutposts(board);
         score += evaluatePawnStructure(board);
         score += evaluateKingMobility(board, phase);
-        score += evaluateEndgameKingActivity(board, endgamePhase);
-        score += evaluateKingPassedPawnProximity(board, endgamePhase);
-        score += evaluatePassedPawnSupport(board, endgamePhase);
-        score += evaluatePromotionThreat(board, endgamePhase);
-        score += evaluateOpposition(board, endgamePhase);
+        if (whiteKingRow != -1 && blackKingRow != -1)
+        {
+            score += evaluateEndgameKingActivity(board, endgamePhase,
+                whiteKingRow, whiteKingCol, blackKingRow, blackKingCol);
+            score += evaluateKingPassedPawnProximity(board, endgamePhase,
+                whiteKingRow, whiteKingCol, blackKingRow, blackKingCol);
+            score += evaluatePassedPawnSupport(board, endgamePhase,
+                whiteKingRow, whiteKingCol, blackKingRow, blackKingCol);
+            score += evaluatePromotionThreat(board, endgamePhase,
+                whiteKingRow, whiteKingCol, blackKingRow, blackKingCol);
+            score += evaluateOpposition(board, endgamePhase,
+                whiteKingRow, whiteKingCol, blackKingRow, blackKingCol);
+        }
         score += evaluateRookFiles(board, phase);
         score += evaluateRookSeventhRank(board, phase);
         score += evaluateConnectedRooks(board);
@@ -172,7 +203,6 @@ int Evaluation ::boardEvaluation(Board& board)
         score += evaluateKnightMobility(board, phase);
         score += evaluateKnightCentralization(board, endgamePhase);
         score += evaluatePawnStructure(board, endgamePhase);
-        score += evaluatePawnChains(board);
         score += evaluateProtectedPassedPawns(board);
         score += evaluateConnectedPassedPawns(board);
         score += evaluatePawnAdvancement(board);
@@ -498,9 +528,6 @@ int Evaluation::evaluateDoubledPawns(const Board& board)
 int Evaluation::evaluatePawnStructure(const Board& board)
 {
     int score = 0;
-
-    score += evaluateDoubledPawns(board);
-    score += evaluateIsolatedPawns(board);
     score += evaluatePawnChains(board);
     score += evaluatePassedPawns(board);
     return score;
@@ -776,11 +803,9 @@ int Evaluation::evaluateKingMobility(Board& board, int phase)
                 // King cannot move onto an attacked square.
                 Move kingMove(row, col, newRow, newCol);
 
-                board.makeMove(kingMove);
-                bool illegal = board.isKingInCheck(whiteKing);
-                board.undoMove();
+               bool attacked = board.isSquareAttacked(newRow, newCol, !whiteKing);
 
-                if (!illegal)
+                if (!attacked)
                     mobility++;
             }
 
@@ -800,38 +825,10 @@ int Evaluation::evaluateKingMobility(Board& board, int phase)
     return score;
 }
 
-int Evaluation::evaluateEndgameKingActivity(Board& board, int endgamePhase)
+int Evaluation::evaluateEndgameKingActivity(Board& board, int endgamePhase,
+    int whiteKingRow, int whiteKingCol, int blackKingRow, int blackKingCol)
 {
     constexpr int KING_ACTIVITY_BONUS = 10;
-
-    int whiteKingRow = -1;
-    int whiteKingCol = -1;
-
-    int blackKingRow = -1;
-    int blackKingCol = -1;
-
-    // Find both kings.
-    for (int row = 0; row < 8; row++)
-    {
-        for (int col = 0; col < 8; col++)
-        {
-            char piece = board.getPiece(row, col);
-
-            if (piece == 'K')
-            {
-                whiteKingRow = row;
-                whiteKingCol = col;
-            }
-            else if (piece == 'k')
-            {
-                blackKingRow = row;
-                blackKingCol = col;
-            }
-        }
-    }
-
-    if (whiteKingRow == -1 || blackKingRow == -1)
-        return 0;
 
     // Manhattan distance between kings.
     int distance =
@@ -849,40 +846,12 @@ int Evaluation::evaluateEndgameKingActivity(Board& board, int endgamePhase)
     return activity;
 }
 
-int Evaluation::evaluateKingPassedPawnProximity(const Board& board, int endgamePhase)
+int Evaluation::evaluateKingPassedPawnProximity(const Board& board, int endgamePhase,
+    int whiteKingRow, int whiteKingCol, int blackKingRow, int blackKingCol)
 {
     constexpr int KING_PAWN_DISTANCE_BONUS = 8;
 
     int score = 0;
-
-    int whiteKingRow = -1;
-    int whiteKingCol = -1;
-
-    int blackKingRow = -1;
-    int blackKingCol = -1;
-
-    // Find kings.
-    for (int row = 0; row < 8; row++)
-    {
-        for (int col = 0; col < 8; col++)
-        {
-            char piece = board.getPiece(row, col);
-
-            if (piece == 'K')
-            {
-                whiteKingRow = row;
-                whiteKingCol = col;
-            }
-            else if (piece == 'k')
-            {
-                blackKingRow = row;
-                blackKingCol = col;
-            }
-        }
-    }
-
-    if (whiteKingRow == -1 || blackKingRow == -1)
-        return 0;
 
     for (int row = 0; row < 8; row++)
     {
@@ -1005,41 +974,13 @@ bool Evaluation::isPawnBlockaded(
     return false;
 }
 
-int Evaluation::evaluatePassedPawnSupport(const Board& board, int endgamePhase)
+int Evaluation::evaluatePassedPawnSupport(const Board& board, int endgamePhase,
+    int whiteKingRow, int whiteKingCol, int blackKingRow, int blackKingCol)
 {
-    constexpr int KING_SUPPORT_BONUS = 12;
+  
     constexpr int BLOCKADE_PENALTY = 15;
 
     int score = 0;
-
-    int whiteKingRow = -1;
-    int whiteKingCol = -1;
-
-    int blackKingRow = -1;
-    int blackKingCol = -1;
-
-    // Find kings.
-    for (int row = 0; row < 8; row++)
-    {
-        for (int col = 0; col < 8; col++)
-        {
-            char piece = board.getPiece(row, col);
-
-            if (piece == 'K')
-            {
-                whiteKingRow = row;
-                whiteKingCol = col;
-            }
-            else if (piece == 'k')
-            {
-                blackKingRow = row;
-                blackKingCol = col;
-            }
-        }
-    }
-
-    if (whiteKingRow == -1 || blackKingRow == -1)
-        return 0;
 
     for (int row = 0; row < 8; row++)
     {
@@ -1047,28 +988,15 @@ int Evaluation::evaluatePassedPawnSupport(const Board& board, int endgamePhase)
         {
             char pawn = board.getPiece(row, col);
 
-            // -------------------------------------------------
+                        // -------------------------------------------------
             // WHITE PASSED PAWN
             // -------------------------------------------------
+            // Note: own-king-proximity bonus lives solely in
+            // evaluateKingPassedPawnProximity now — only the
+            // blockade penalty (a distinct concept) stays here.
             if (pawn == 'P' &&
                 isPassedPawn(board, row, col, true))
             {
-                // King supporting the pawn.
-                int kingDistance =
-                    std::max(
-                        abs(whiteKingRow - row),
-                        abs(whiteKingCol - col));
-
-                if (kingDistance <= 1)
-                {
-                    int bonus = KING_SUPPORT_BONUS;
-
-                    bonus =
-                        (bonus * endgamePhase) / 24;
-
-                    score += bonus;
-                }
-
                 // Pawn is directly blocked.
                 if (isPawnBlockaded(
                         board, row, col, true))
@@ -1087,21 +1015,6 @@ int Evaluation::evaluatePassedPawnSupport(const Board& board, int endgamePhase)
             else if (pawn == 'p' &&
                      isPassedPawn(board, row, col, false))
             {
-                int kingDistance =
-                    std::max(
-                        abs(blackKingRow - row),
-                        abs(blackKingCol - col));
-
-                if (kingDistance <= 1)
-                {
-                    int bonus = KING_SUPPORT_BONUS;
-
-                    bonus =
-                        (bonus * endgamePhase) / 24;
-
-                    score -= bonus;
-                }
-
                 if (isPawnBlockaded(
                         board, row, col, false))
                 {
@@ -1112,46 +1025,19 @@ int Evaluation::evaluatePassedPawnSupport(const Board& board, int endgamePhase)
                     score += penalty;
                 }
             }
+           
         }
     }
 
     return score;
 }
 
-int Evaluation::evaluatePromotionThreat(const Board& board, int endgamePhase)
+int Evaluation::evaluatePromotionThreat(const Board& board, int endgamePhase,
+    int whiteKingRow, int whiteKingCol, int blackKingRow, int blackKingCol)
 {
-    constexpr int PROMOTION_BONUS = 80;
+    constexpr int PROMOTION_BONUS = 100;
 
     int score = 0;
-
-    int whiteKingRow = -1;
-    int whiteKingCol = -1;
-
-    int blackKingRow = -1;
-    int blackKingCol = -1;
-
-    // Find kings.
-    for (int row = 0; row < 8; row++)
-    {
-        for (int col = 0; col < 8; col++)
-        {
-            char piece = board.getPiece(row, col);
-
-            if (piece == 'K')
-            {
-                whiteKingRow = row;
-                whiteKingCol = col;
-            }
-            else if (piece == 'k')
-            {
-                blackKingRow = row;
-                blackKingCol = col;
-            }
-        }
-    }
-
-    if (whiteKingRow == -1 || blackKingRow == -1)
-        return 0;
 
     for (int row = 0; row < 8; row++)
     {
@@ -1170,8 +1056,7 @@ int Evaluation::evaluatePromotionThreat(const Board& board, int endgamePhase)
                 // Only advanced pawns get this bonus.
                 if (rank >= 5)
                 {
-                    int bonus =
-                        (rank - 4) * PROMOTION_BONUS;
+                    int bonus = (rank - 4) * PROMOTION_BONUS;
 
                     // Is the black king close enough
                     // to interfere?
@@ -1185,8 +1070,7 @@ int Evaluation::evaluatePromotionThreat(const Board& board, int endgamePhase)
                         bonus /= 2;
                     }
 
-                    bonus =
-                        (bonus * endgamePhase) / 24;
+                    bonus = (bonus * endgamePhase) / 24;
 
                     score += bonus;
                 }
@@ -1215,8 +1099,7 @@ int Evaluation::evaluatePromotionThreat(const Board& board, int endgamePhase)
                         bonus /= 2;
                     }
 
-                    bonus =
-                        (bonus * endgamePhase) / 24;
+                    bonus = (bonus * endgamePhase) / 24;
 
                     score -= bonus;
                 }
@@ -1227,38 +1110,10 @@ int Evaluation::evaluatePromotionThreat(const Board& board, int endgamePhase)
     return score;
 }
 
-int Evaluation::evaluateOpposition(const Board& board, int endgamePhase)
+int Evaluation::evaluateOpposition(const Board& board, int endgamePhase,
+    int whiteKingRow, int whiteKingCol, int blackKingRow, int blackKingCol)
 {
     constexpr int OPPOSITION_BONUS = 20;
-
-    int whiteKingRow = -1;
-    int whiteKingCol = -1;
-
-    int blackKingRow = -1;
-    int blackKingCol = -1;
-
-    // Find both kings.
-    for (int row = 0; row < 8; row++)
-    {
-        for (int col = 0; col < 8; col++)
-        {
-            char piece = board.getPiece(row, col);
-
-            if (piece == 'K')
-            {
-                whiteKingRow = row;
-                whiteKingCol = col;
-            }
-            else if (piece == 'k')
-            {
-                blackKingRow = row;
-                blackKingCol = col;
-            }
-        }
-    }
-
-    if (whiteKingRow == -1 || blackKingRow == -1)
-        return 0;
 
     int score = 0;
 

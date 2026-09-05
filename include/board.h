@@ -51,6 +51,24 @@ private:
     bool whiteHasCastle;
     bool blackHasCastle;
     std::vector<std::pair<Move, uint64_t>> nullMoveHistory;
+    uint64_t pieceBB[12];   // indexed by PieceIndex below
+    uint64_t whiteOccupancy;
+    uint64_t blackOccupancy;
+    uint64_t allOccupancy;
+
+    enum PieceIndex
+    {
+        WP = 0, WN, WB, WR, WQ, WK,
+        BP, BN, BB, BR, BQ, BK
+    };
+
+    void syncBitboards();
+    static int pieceToIndex(char piece);
+    static uint64_t knightAttacks[64];
+    static uint64_t kingAttacks[64];
+    static uint64_t pawnAttacks[2][64];   // [0]=white attacks, [1]=black attacks
+    static bool attackTablesInitialized;
+    static void initAttackTables();
 
 public:
     Board();
