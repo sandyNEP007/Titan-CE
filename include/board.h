@@ -63,6 +63,8 @@ private:
     };
 
     void syncBitboards();
+    void updateBitboardSquare(int row, int col);
+    void recomputeOccupancy();
     static int pieceToIndex(char piece);
     static uint64_t knightAttacks[64];
     static uint64_t kingAttacks[64];
