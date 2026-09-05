@@ -25,6 +25,7 @@ private:
 
 public:
     static void loop();
+    static void show();
 };
 
 #endif

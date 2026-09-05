@@ -15,13 +15,18 @@ public:
     static bool isPassedPawn(const Board& board, int row, int col, bool whitePawn);
     static bool isPawnSupported(const Board& board, int row, int col, bool whitePawn);
     static int evaluateKingMobility(Board& board, int phase);
-    static int evaluateEndgameKingActivity(Board& board, int endgamePhase);
-    static int evaluateKingPassedPawnProximity(const Board& board, int endgamePhase);
-    static int evaluatePassedPawnSupport(const Board& board, int endgamePhase);
+    static int evaluateEndgameKingActivity(Board& board, int endgamePhase,
+    int whiteKingRow, int whiteKingCol, int blackKingRow, int blackKingCol);
+    static int evaluateKingPassedPawnProximity(const Board& board, int endgamePhase,
+    int whiteKingRow, int whiteKingCol, int blackKingRow, int blackKingCol);
+    static int evaluatePassedPawnSupport(const Board& board, int endgamePhase,
+    int whiteKingRow, int whiteKingCol, int blackKingRow, int blackKingCol);
     static int evaluatePawnChains(const Board& board);
     static bool isPawnBlockaded(const Board& board, int row, int col, bool whitePawn);
-    static int evaluatePromotionThreat(const Board& board, int endgamePhase);
-    static int evaluateOpposition(const Board& board, int endgamePhase);
+   static int evaluatePromotionThreat(const Board& board, int endgamePhase,
+    int whiteKingRow, int whiteKingCol, int blackKingRow, int blackKingCol);
+   static int evaluateOpposition(const Board& board, int endgamePhase,
+    int whiteKingRow, int whiteKingCol, int blackKingRow, int blackKingCol);
     static int evaluateRookFiles(const Board& board, int phase);
     static int evaluateRookSeventhRank(const Board& board, int phase);
     static int evaluateConnectedRooks(const Board& board);
