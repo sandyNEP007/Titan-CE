@@ -67,7 +67,32 @@ uint64_t Board::knightAttacks[64];
 uint64_t Board::kingAttacks[64];
 uint64_t Board::pawnAttacks[2][64];
 bool Board::attackTablesInitialized = false;
+void Board::updateBitboardSquare(int row, int col)
+{
+    int square = row * 8 + col;
+    uint64_t bit = 1ULL << square;
+    uint64_t notBit = ~bit;
 
+    for (int i = 0; i < 12; i++)
+        pieceBB[i] &= notBit;
+
+    char piece = board[row][col];
+    int idx = pieceToIndex(piece);
+
+    if (idx != -1)
+        pieceBB[idx] |= bit;
+}
+
+void Board::recomputeOccupancy()
+{
+    whiteOccupancy = pieceBB[WP] | pieceBB[WN] | pieceBB[WB] |
+                      pieceBB[WR] | pieceBB[WQ] | pieceBB[WK];
+
+    blackOccupancy = pieceBB[BP] | pieceBB[BN] | pieceBB[BB] |
+                      pieceBB[BR] | pieceBB[BQ] | pieceBB[BK];
+
+    allOccupancy = whiteOccupancy | blackOccupancy;
+}
 void Board::initAttackTables()
 {
     if (attackTablesInitialized)
@@ -873,6 +898,7 @@ history.back().wasCastling = isCastling;
 
     // Remove captured pawn from board
     board[capturedPawnRow][move.toCol] = '.';
+    updateBitboardSquare(capturedPawnRow, move.toCol);
 }
     if (isCastling)
     {
@@ -896,6 +922,11 @@ history.back().wasCastling = isCastling;
             board[7][5] = 'R';
 
             whiteKingMoved = true;
+            updateBitboardSquare(7, 4);
+            updateBitboardSquare(7, 6);
+            updateBitboardSquare(7, 7);
+            updateBitboardSquare(7, 5);
+
             whiteRightRookMoved = true;
             whiteHasCastle = true;
         }
@@ -916,6 +947,11 @@ history.back().wasCastling = isCastling;
             board[7][3] = 'R';
 
             whiteKingMoved = true;
+            updateBitboardSquare(7, 4);
+            updateBitboardSquare(7, 2);
+            updateBitboardSquare(7, 0);
+            updateBitboardSquare(7, 3);
+
             whiteLeftRookMoved = true;
             whiteHasCastle = true;
         }
@@ -948,6 +984,11 @@ history.back().wasCastling = isCastling;
             board[0][5] = 'r';
 
             blackKingMoved = true;
+            updateBitboardSquare(0, 4);
+            updateBitboardSquare(0, 6);
+            updateBitboardSquare(0, 7);
+            updateBitboardSquare(0, 5);
+
             blackRightRookMoved = true;
             blackHasCastle = true;
         }
@@ -968,6 +1009,10 @@ history.back().wasCastling = isCastling;
             board[0][3] = 'r';
 
             blackKingMoved = true;
+            updateBitboardSquare(0, 4);
+            updateBitboardSquare(0, 2);
+            updateBitboardSquare(0, 0);
+            updateBitboardSquare(0, 3);
             blackLeftRookMoved = true;
             blackHasCastle = true;
         }
@@ -1032,11 +1077,10 @@ if (move.promotion != '\0')
     }
 }
         // Move piece on board
-        board[move.toRow][move.toCol] =
-    pieceToPlace;
-
-        board[move.fromRow][move.fromCol] =
-            '.';
+        board[move.toRow][move.toCol] = pieceToPlace;
+        board[move.fromRow][move.fromCol] = '.';
+        updateBitboardSquare(move.toRow, move.toCol);
+        updateBitboardSquare(move.fromRow, move.fromCol);
         
         // Add moving piece at new square
         zobristHash ^=
@@ -1061,7 +1105,7 @@ if (move.promotion != '\0')
 
     // Add new side-to-move
     zobristHash ^= Zobrist::getSideKey();
-    syncBitboards();
+   recomputeOccupancy();
 }
 void Board::undoMove()
 {
@@ -1104,6 +1148,10 @@ void Board::undoMove()
 
         board[7][7] = 'R';
         board[7][5] = '.';
+        updateBitboardSquare(7, 4);
+        updateBitboardSquare(7, 6);
+        updateBitboardSquare(7, 7);
+        updateBitboardSquare(7, 5);
     }
 
     // White queen-side
@@ -1115,6 +1163,10 @@ void Board::undoMove()
 
         board[7][0] = 'R';
         board[7][3] = '.';
+        updateBitboardSquare(7, 4);
+        updateBitboardSquare(7, 2);
+        updateBitboardSquare(7, 0);
+        updateBitboardSquare(7, 3);
     }
 
     // Black king-side
@@ -1126,6 +1178,10 @@ void Board::undoMove()
 
         board[0][7] = 'r';
         board[0][5] = '.';
+        updateBitboardSquare(0, 4);
+        updateBitboardSquare(0, 6);
+        updateBitboardSquare(0, 7);
+        updateBitboardSquare(0, 5);
     }
 
     // Black queen-side
@@ -1137,6 +1193,10 @@ void Board::undoMove()
 
         board[0][0] = 'r';
         board[0][3] = '.';
+        updateBitboardSquare(0, 4);
+        updateBitboardSquare(0, 2);
+        updateBitboardSquare(0, 0);
+        updateBitboardSquare(0, 3);
     }
 }
 else if (undo.wasEnPassant)
@@ -1153,6 +1213,9 @@ else if (undo.wasEnPassant)
     board[undo.enPassantCapturedRow]
          [undo.enPassantCapturedCol] =
         undo.enPassantCapturedPiece;
+         updateBitboardSquare(undo.move.fromRow, undo.move.fromCol);
+    updateBitboardSquare(undo.move.toRow, undo.move.toCol);
+    updateBitboardSquare(undo.enPassantCapturedRow, undo.enPassantCapturedCol);
 }
 else
 {
@@ -1162,10 +1225,13 @@ else
 
     board[undo.move.toRow][undo.move.toCol] =
         undo.capturedPiece;
+        updateBitboardSquare(undo.move.fromRow, undo.move.fromCol);
+    updateBitboardSquare(undo.move.toRow, undo.move.toCol);
 }
 
 zobristHash = undo.previousZobristHash;
-syncBitboards();
+
+recomputeOccupancy();
 
 }
 void Board::makeNullMove()

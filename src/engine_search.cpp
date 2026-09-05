@@ -237,6 +237,7 @@ int EngineSearch::see(Board& board, const Move& move)
 
     while (d > 0)
     {
+        
         gain[d - 1] = -std::max(-gain[d - 1], gain[d]);
         d--;
     }
