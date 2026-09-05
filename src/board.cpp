@@ -1284,6 +1284,7 @@ bool Board::isValidCastle(const Move& move)
             if (board[7][5] != '.' ||
                 board[7][6] != '.')
                 return false;
+                
 
             // King cannot be in check,
             // pass through check, or land in check
