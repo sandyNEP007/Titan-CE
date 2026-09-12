@@ -182,6 +182,8 @@ int Evaluation ::boardEvaluation(Board& board)
         score += evaluateKingMobility(board, phase);
         if (whiteKingRow != -1 && blackKingRow != -1)
         {
+            score += evaluatePinnedPieces(board,
+                whiteKingRow, whiteKingCol, blackKingRow, blackKingCol);
             score += evaluateEndgameKingActivity(board, endgamePhase,
                 whiteKingRow, whiteKingCol, blackKingRow, blackKingCol);
             score += evaluateKingPassedPawnProximity(board, endgamePhase,
@@ -643,7 +645,7 @@ bool Evaluation::isPawnSupported(const Board& board, int row, int col, bool whit
 
 int Evaluation::evaluatePawnChains(const Board& board)
 {
-    constexpr int PAWN_CHAIN_BONUS = 5;
+    constexpr int PAWN_CHAIN_BONUS = 35;
 
     int score = 0;
 
@@ -2326,6 +2328,105 @@ int Evaluation::evaluateCastling(Board& board, int phase)
 
     if (board.hasBlackCastled())
         score -= bonus;
+
+    return score;
+}
+int Evaluation::isPinned(Board &board, int row, int col, bool byWhite,
+    int ownKingRow, int ownKingCol)
+{
+    constexpr int PINNED_PIECE_PENALTY = 50;
+    int score = 0;
+
+    if (row == ownKingRow && col == ownKingCol)
+        return score;   // the king itself is never "pinned"
+
+    int dRow = row - ownKingRow;
+    int dCol = col - ownKingCol;
+
+    bool sameRow = (dRow == 0);
+    bool sameCol = (dCol == 0);
+    bool diagonal = (!sameRow && !sameCol && abs(dRow) == abs(dCol));
+
+    if (!sameRow && !sameCol && !diagonal)
+        return score;   // not aligned with own king — can't be pinned
+
+    int stepRow = (dRow == 0) ? 0 : (dRow > 0 ? 1 : -1);
+    int stepCol = (dCol == 0) ? 0 : (dCol > 0 ? 1 : -1);
+
+    // Walk from the king toward (row,col) — our piece must be the FIRST
+    // one on this ray, or something else is already blocking it.
+    int r = ownKingRow + stepRow;
+    int c = ownKingCol + stepCol;
+
+    while (r != row || c != col)
+    {
+        if (board.getPiece(r, c) != '.')
+            return score;   // blocked before reaching our piece
+
+        r += stepRow;
+        c += stepCol;
+    }
+
+    // Continue past our piece, looking for an enemy slider of the
+    // matching type with nothing else in between.
+    r += stepRow;
+    c += stepCol;
+
+    char enemySlider = diagonal
+        ? (byWhite ? 'b' : 'B')
+        : (byWhite ? 'r' : 'R');
+
+    char enemyQueen = byWhite ? 'q' : 'Q';
+
+    while (r >= 0 && r < 8 && c >= 0 && c < 8)
+    {
+        char piece = board.getPiece(r, c);
+
+        if (piece == '.')
+        {
+            r += stepRow;
+            c += stepCol;
+            continue;
+        }
+
+        if (piece == enemySlider || piece == enemyQueen)
+        {
+            score = byWhite ? -PINNED_PIECE_PENALTY : PINNED_PIECE_PENALTY;
+        }
+
+        break;
+    }
+
+    return score;
+}
+
+int Evaluation::evaluatePinnedPieces(Board& board,
+    int whiteKingRow, int whiteKingCol, int blackKingRow, int blackKingCol)
+{
+    int score = 0;
+
+    for (int row = 0; row < 8; row++)
+    {
+        for (int col = 0; col < 8; col++)
+        {
+            char piece = board.getPiece(row, col);
+
+            if (piece == '.')
+                continue;
+
+            bool isWhitePiece = board.isWhitePiece(piece);
+
+            // Kings can't be pinned, and pinning your own king to itself
+            // makes no sense — skip both king squares.
+            if (piece == 'K' || piece == 'k')
+                continue;
+
+            if (isWhitePiece)
+                score += isPinned(board, row, col, true, whiteKingRow, whiteKingCol);
+            else
+                score += isPinned(board, row, col, false, blackKingRow, blackKingCol);
+        }
+    }
 
     return score;
 }
