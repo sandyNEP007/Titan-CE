@@ -5,755 +5,666 @@
 std::vector<Move> MoveGenerator::generateLegalMoves(Board& board)
 {
     std::vector<Move> legalMoves;
-    std::vector<Move> pseudoLegalMoves;
 
-    bool movingSide = board.isWhiteTurn();
+    const bool white = board.isWhiteTurn();
 
-    // Generate pseudo-legal moves
-    for (int row = 0; row < 8; row++)
+    // ------------------------------------------------------------
+    // Piece indexes from Board::PieceIndex
+    // ------------------------------------------------------------
+    const int MY_PAWN   = white ? Board::WP : Board::BP;
+    const int MY_KNIGHT = white ? Board::WN : Board::BN;
+    const int MY_BISHOP = white ? Board::WB : Board::BB;
+    const int MY_ROOK   = white ? Board::WR : Board::BR;
+    const int MY_QUEEN  = white ? Board::WQ : Board::BQ;
+    const int MY_KING   = white ? Board::WK : Board::BK;
+
+    const int EN_PAWN   = white ? Board::BP : Board::WP;
+    const int EN_KNIGHT = white ? Board::BN : Board::WN;
+    const int EN_BISHOP = white ? Board::BB : Board::WB;
+    const int EN_ROOK   = white ? Board::BR : Board::WR;
+    const int EN_QUEEN  = white ? Board::BQ : Board::WQ;
+    const int EN_KING   = white ? Board::BK : Board::WK;
+
+    const uint64_t ownOcc   = white ? board.whiteOccupancy : board.blackOccupancy;
+    const uint64_t enemyOcc = white ? board.blackOccupancy : board.whiteOccupancy;
+    const uint64_t occupied = board.allOccupancy;
+
+   
+    auto popLSB = [](uint64_t& bb) -> int
     {
-        for (int col = 0; col < 8; col++)
-        {
-            char piece = board.getPiece(row, col);
+        int sq = __builtin_ctzll(bb);
+        bb &= bb - 1;
+        return sq;
+    };
 
-            if (piece == '.')
-                continue;
-
-            if (movingSide)
-            {
-                if (!(piece >= 'A' && piece <= 'Z'))
-                    continue;
-            }
-            else
-            {
-                if (!(piece >= 'a' && piece <= 'z'))
-                    continue;
-            }
-
-            if (piece == 'P' || piece == 'p')
-                generatePawnMoves(board, row, col, pseudoLegalMoves);
-
-            else if (piece == 'N' || piece == 'n')
-                generateKnightMoves(board, row, col, pseudoLegalMoves);
-
-            else if (piece == 'B' || piece == 'b')
-                generateBishopMoves(board, row, col, pseudoLegalMoves);
-
-            else if (piece == 'R' || piece == 'r')
-                generateRookMoves(board, row, col, pseudoLegalMoves);
-
-            else if (piece == 'Q' || piece == 'q')
-                generateQueenMoves(board, row, col, pseudoLegalMoves);
-
-            else if (piece == 'K' || piece == 'k')
-                generateKingMoves(board, row, col, pseudoLegalMoves);
-        }
-    }
-
-    // ---- Find own king ----
-    char kingChar = movingSide ? 'K' : 'k';
-    int kingRow = -1, kingCol = -1;
-
-    for (int r = 0; r < 8 && kingRow == -1; r++)
+    auto bit = [](int sq) -> uint64_t
     {
-        for (int c = 0; c < 8; c++)
+        return 1ULL << sq;
+    };
+
+    auto rowOf = [](int sq) -> int
+    {
+        return sq / 8;
+    };
+
+    auto colOf = [](int sq) -> int
+    {
+        return sq % 8;
+    };
+
+   
+    auto bishopAttacks = [&](int sq, uint64_t occ) -> uint64_t
+    {
+        uint64_t attacks = 0;
+
+        const int r = rowOf(sq);
+        const int c = colOf(sq);
+
+        const int dirs[4][2] =
         {
-            if (board.getPiece(r, c) == kingChar)
+            {-1, -1},
+            {-1,  1},
+            { 1, -1},
+            { 1,  1}
+        };
+
+        for (const auto& d : dirs)
+        {
+            int nr = r + d[0];
+            int nc = c + d[1];
+
+            while (nr >= 0 && nr < 8 && nc >= 0 && nc < 8)
             {
-                kingRow = r;
-                kingCol = c;
-                break;
+                int nsq = nr * 8 + nc;
+                attacks |= bit(nsq);
+
+                if (occ & bit(nsq))
+                    break;
+
+                nr += d[0];
+                nc += d[1];
             }
         }
-    }
 
-    if (kingRow == -1)
+        return attacks;
+    };
+
+    auto rookAttacks = [&](int sq, uint64_t occ) -> uint64_t
+    {
+        uint64_t attacks = 0;
+
+        const int r = rowOf(sq);
+        const int c = colOf(sq);
+
+        const int dirs[4][2] =
+        {
+            {-1, 0},
+            { 1, 0},
+            { 0,-1},
+            { 0, 1}
+        };
+
+        for (const auto& d : dirs)
+        {
+            int nr = r + d[0];
+            int nc = c + d[1];
+
+            while (nr >= 0 && nr < 8 && nc >= 0 && nc < 8)
+            {
+                int nsq = nr * 8 + nc;
+                attacks |= bit(nsq);
+
+                if (occ & bit(nsq))
+                    break;
+
+                nr += d[0];
+                nc += d[1];
+            }
+        }
+
+        return attacks;
+    };
+
+    auto isSquareAttackedBB =
+        [&](int sq,
+            bool byWhite,
+            uint64_t occ,
+            const uint64_t* pieces) -> bool
+    {
+        const int pawn   = byWhite ? Board::WP : Board::BP;
+        const int knight = byWhite ? Board::WN : Board::BN;
+        const int bishop = byWhite ? Board::WB : Board::BB;
+        const int rook   = byWhite ? Board::WR : Board::BR;
+        const int queen  = byWhite ? Board::WQ : Board::BQ;
+        const int king   = byWhite ? Board::WK : Board::BK;
+
+        // Pawn attacks.
+        if (board.pawnAttacks[byWhite ? 0 : 1][sq] & pieces[pawn])
+            return true;
+
+        // Knight attacks.
+        if (board.knightAttacks[sq] & pieces[knight])
+            return true;
+
+        // King attacks.
+        if (board.kingAttacks[sq] & pieces[king])
+            return true;
+
+        // Bishop / Queen.
+        if (bishopAttacks(sq, occ) & (pieces[bishop] | pieces[queen]))
+            return true;
+
+        // Rook / Queen.
+        if (rookAttacks(sq, occ) & (pieces[rook] | pieces[queen]))
+            return true;
+
+        return false;
+    };
+
+
+    uint64_t kingBB = board.pieceBB[MY_KING];
+
+    if (!kingBB)
         return legalMoves;
 
-    // ---- Single ray-walk from the king: finds sliding checkers AND
-    //      pinned pieces in one pass (a pin is: friendly piece, then an
-    //      enemy slider of the matching type, with nothing in between). ----
-    struct PinInfo { int row, col, dRow, dCol; };
-    std::vector<PinInfo> pinned;
-    std::vector<std::pair<int,int>> checkerSquares;
-    std::vector<std::pair<int,int>> blockSquares;
+    const int kingSq = __builtin_ctzll(kingBB);
+    const int kingRow = rowOf(kingSq);
+    const int kingCol = colOf(kingSq);
 
-    const int diagDirs[4][2] = { {-1,-1},{-1,1},{1,-1},{1,1} };
-    const int straightDirs[4][2] = { {-1,0},{1,0},{0,-1},{0,1} };
 
-    auto walkRay = [&](int dRow, int dCol, bool diagonal)
+    uint64_t checkers = 0;
+
+    // Pawn checker.
+    checkers |= board.pawnAttacks[white ? 1 : 0][kingSq]
+                & board.pieceBB[EN_PAWN];
+
+    // Knight checker.
+    checkers |= board.knightAttacks[kingSq]
+                & board.pieceBB[EN_KNIGHT];
+
+    // King checker.
+    checkers |= board.kingAttacks[kingSq]
+                & board.pieceBB[EN_KING];
+
+    // Sliding checkers.
+    uint64_t bishopLike =
+        board.pieceBB[EN_BISHOP] |
+        board.pieceBB[EN_QUEEN];
+
+    uint64_t rookLike =
+        board.pieceBB[EN_ROOK] |
+        board.pieceBB[EN_QUEEN];
+
+    checkers |= bishopAttacks(kingSq, occupied) & bishopLike;
+    checkers |= rookAttacks(kingSq, occupied) & rookLike;
+
+    const int numberOfCheckers = __builtin_popcountll(checkers);
+
+   
+    uint64_t pinned = 0;
+    uint64_t pinMasks[64];
+
+    for (int i = 0; i < 64; ++i)
+        pinMasks[i] = ~0ULL;
+
+    const int allDirs[8][2] =
     {
-        char enemySlider1 = movingSide ? (diagonal ? 'b' : 'r') : (diagonal ? 'B' : 'R');
-        char enemyQueen   = movingSide ? 'q' : 'Q';
+        {-1,-1}, {-1,0}, {-1,1},
+        { 0,-1},          { 0,1},
+        { 1,-1}, { 1,0},  { 1,1}
+    };
 
-        int r = kingRow + dRow;
-        int c = kingCol + dCol;
+    for (const auto& d : allDirs)
+    {
+        const bool diagonal =
+            (d[0] != 0 && d[1] != 0);
 
-        std::vector<std::pair<int,int>> raySoFar;
-        bool foundFriendly = false;
-        int friendlyRow = -1, friendlyCol = -1;
+        const int enemySlider =
+            diagonal ? EN_BISHOP : EN_ROOK;
+
+        int r = kingRow + d[0];
+        int c = kingCol + d[1];
+
+        int friendlySq = -1;
 
         while (r >= 0 && r < 8 && c >= 0 && c < 8)
         {
-            char piece = board.getPiece(r, c);
+            int sq = r * 8 + c;
 
-            if (piece == '.')
+            if (!(occupied & bit(sq)))
             {
-                raySoFar.push_back({r, c});
-                r += dRow;
-                c += dCol;
+                r += d[0];
+                c += d[1];
                 continue;
             }
 
-            bool isEnemy = movingSide ? board.isBlackPiece(piece) : board.isWhitePiece(piece);
-
-            if (!foundFriendly)
+            if (ownOcc & bit(sq))
             {
-                if (!isEnemy)
+                // First friendly piece on the ray.
+                if (friendlySq == -1)
                 {
-                    foundFriendly = true;
-                    friendlyRow = r;
-                    friendlyCol = c;
-                    r += dRow;
-                    c += dCol;
+                    friendlySq = sq;
+                    r += d[0];
+                    c += d[1];
                     continue;
+                }
+
+                // Second friendly piece blocks the pin.
+                break;
+            }
+
+            // Enemy piece.
+            if (friendlySq != -1)
+            {
+                const bool isSlider =
+                    (board.pieceBB[enemySlider] & bit(sq)) ||
+                    (board.pieceBB[EN_QUEEN] & bit(sq));
+
+                if (isSlider)
+                {
+                    pinned |= bit(friendlySq);
+
+                    uint64_t mask = 0;
+
+                    int pr = rowOf(kingSq);
+                    int pc = colOf(kingSq);
+
+                    while (true)
+                    {
+                        int psq = pr * 8 + pc;
+                        mask |= bit(psq);
+
+                        if (psq == sq)
+                            break;
+
+                        pr += d[0];
+                        pc += d[1];
+                    }
+
+                    pinMasks[friendlySq] = mask;
+                }
+            }
+
+            break;
+        }
+    }
+
+   
+    uint64_t kingTargets =
+        board.kingAttacks[kingSq] & ~ownOcc;
+
+    while (kingTargets)
+    {
+        const int toSq = popLSB(kingTargets);
+
+        // Remove our king from its old square.
+        uint64_t newOcc =
+            occupied ^ bit(kingSq);
+
+        // Remove captured enemy piece, if any.
+        if (enemyOcc & bit(toSq))
+            newOcc ^= bit(toSq);
+
+        // Put king on destination.
+        newOcc |= bit(toSq);
+
+        // Copy piece bitboards because a capture may remove an enemy.
+        uint64_t tempPieces[12];
+
+        for (int i = 0; i < 12; ++i)
+            tempPieces[i] = board.pieceBB[i];
+
+        tempPieces[MY_KING] &= ~bit(kingSq);
+        tempPieces[MY_KING] |= bit(toSq);
+
+        // Remove captured enemy piece.
+        if (enemyOcc & bit(toSq))
+        {
+            for (int i = EN_PAWN; i <= EN_KING; ++i)
+                tempPieces[i] &= ~bit(toSq);
+        }
+
+        if (!isSquareAttackedBB(
+                toSq,
+                !white,
+                newOcc,
+                tempPieces))
+        {
+            legalMoves.emplace_back(
+                kingRow,
+                kingCol,
+                rowOf(toSq),
+                colOf(toSq)
+            );
+        }
+    }
+
+    if (numberOfCheckers >= 2)
+        return legalMoves;
+
+    uint64_t evasionMask = ~0ULL;
+
+    if (numberOfCheckers == 1)
+    {
+        const int checkerSq = __builtin_ctzll(checkers);
+
+        evasionMask = bit(checkerSq);
+
+        const bool checkerIsBishopLike =
+            (board.pieceBB[EN_BISHOP] |
+             board.pieceBB[EN_QUEEN]) & bit(checkerSq);
+
+        const bool checkerIsRookLike =
+            (board.pieceBB[EN_ROOK] |
+             board.pieceBB[EN_QUEEN]) & bit(checkerSq);
+
+        if (checkerIsBishopLike || checkerIsRookLike)
+        {
+            int kr = kingRow;
+            int kc = kingCol;
+
+            const int cr = rowOf(checkerSq);
+            const int cc = colOf(checkerSq);
+
+            int dr = (cr > kr) ? 1 : (cr < kr ? -1 : 0);
+            int dc = (cc > kc) ? 1 : (cc < kc ? -1 : 0);
+
+            int r = kr + dr;
+            int c = kc + dc;
+
+            while (r != cr || c != cc)
+            {
+                evasionMask |= bit(r * 8 + c);
+
+                r += dr;
+                c += dc;
+            }
+        }
+    }
+
+
+    uint64_t pawns = board.pieceBB[MY_PAWN];
+
+    while (pawns)
+    {
+        const int fromSq = popLSB(pawns);
+
+        const int r = rowOf(fromSq);
+        const int c = colOf(fromSq);
+
+        const int direction = white ? -1 : 1;
+        const int promotionRow = white ? 0 : 7;
+        const int startRow = white ? 6 : 1;
+
+        const bool pawnPinned = (pinned & bit(fromSq)) != 0;
+        const int oneRow = r + direction;
+
+
+        if (oneRow >= 0 && oneRow < 8)
+        {
+            const int toSq = oneRow * 8 + c;
+            
+
+            if (!(occupied & bit(toSq)) &&
+                (evasionMask & bit(toSq))&&
+            (!pawnPinned || (pinMasks[fromSq] & bit(toSq))))
+            {
+                if (oneRow == promotionRow)
+                {
+                    legalMoves.emplace_back(r,c,oneRow,c,'Q');
+                    legalMoves.emplace_back(r,c,oneRow,c,'R');
+                    legalMoves.emplace_back(r,c,oneRow,c,'B');
+                    legalMoves.emplace_back(r,c,oneRow,c,'N');
                 }
                 else
                 {
-                    if (piece == enemySlider1 || piece == enemyQueen)
+                    legalMoves.emplace_back(r,c,oneRow,c);
+
+                    // Two-square push.
+                    if (r == startRow)
                     {
-                        checkerSquares.push_back({r, c});
-                        blockSquares = raySoFar;
-                        blockSquares.push_back({r, c});
+                        const int twoRow = r + 2 * direction;
+                        const int twoSq = twoRow * 8 + c;
+
+                        if (!(occupied & bit(twoSq)) &&
+                            (evasionMask & bit(twoSq))&&
+                        (!pawnPinned || (pinMasks[fromSq] & bit(toSq))))
+                        {
+                            legalMoves.emplace_back(r,c,twoRow,c);
+                        }
                     }
-                    break;
                 }
+            }
+        }
+
+        
+       for (int dc : {-1, 1})
+        {
+            const int nr = r + direction;
+            const int nc = c + dc;
+
+            if (nr < 0 || nr >= 8 ||
+                nc < 0 || nc >= 8)
+                continue;
+
+            const int toSq = nr * 8 + nc;
+
+            if (!(enemyOcc & bit(toSq)))
+                continue;
+
+            if (!(evasionMask & bit(toSq)))
+                continue;
+
+            if (pawnPinned && !(pinMasks[fromSq] & bit(toSq)))
+                continue;
+
+            if (nr == promotionRow)
+            {
+                legalMoves.emplace_back(r, c, nr, nc, 'Q');
+                legalMoves.emplace_back(r, c, nr, nc, 'R');
+                legalMoves.emplace_back(r, c, nr, nc, 'B');
+                legalMoves.emplace_back(r, c, nr, nc, 'N');
             }
             else
             {
-                if (isEnemy && (piece == enemySlider1 || piece == enemyQueen))
-                {
-                    pinned.push_back({friendlyRow, friendlyCol, dRow, dCol});
-                }
-                break;
+                legalMoves.emplace_back(r, c, nr, nc);
             }
         }
-    };
+        const int epSq = board.getEnPassantSquare();
 
-    for (auto& d : diagDirs)
-        walkRay(d[0], d[1], true);
-
-    for (auto& d : straightDirs)
-        walkRay(d[0], d[1], false);
-
-    // ---- Pawn / knight checks (non-sliding — checkers only, never pins) ----
-    char enemyPawn = movingSide ? 'p' : 'P';
-    int pawnRow = movingSide ? kingRow - 1 : kingRow + 1;
-
-    if (pawnRow >= 0 && pawnRow < 8)
-    {
-        if (kingCol - 1 >= 0 && board.getPiece(pawnRow, kingCol - 1) == enemyPawn)
-            checkerSquares.push_back({pawnRow, kingCol - 1});
-
-        if (kingCol + 1 < 8 && board.getPiece(pawnRow, kingCol + 1) == enemyPawn)
-            checkerSquares.push_back({pawnRow, kingCol + 1});
-    }
-
-    char enemyKnight = movingSide ? 'n' : 'N';
-    const int knightOffsets[8][2] = {
-        {-2,-1},{-2,1},{-1,-2},{-1,2},{1,-2},{1,2},{2,-1},{2,1}
-    };
-    for (auto& off : knightOffsets)
-    {
-        int r = kingRow + off[0], c = kingCol + off[1];
-        if (r >= 0 && r < 8 && c >= 0 && c < 8 &&
-            board.getPiece(r, c) == enemyKnight)
+        if (epSq != -1)
         {
-            checkerSquares.push_back({r, c});
-        }
-    }
+            const int epRow = rowOf(epSq);
+            const int epCol = colOf(epSq);
 
-    bool inDoubleCheck = checkerSquares.size() >= 2;
-    bool inSingleCheck = checkerSquares.size() == 1;
-
-    if (inSingleCheck && blockSquares.empty())
-        blockSquares.push_back(checkerSquares[0]);
-
-    // ---- Filter pseudo-legal moves ----
-    for (const Move& move : pseudoLegalMoves)
-    {
-        char movedPiece = board.getPiece(move.fromRow, move.fromCol);
-        bool isKingMove = (movedPiece == 'K' || movedPiece == 'k');
-
-        bool isEnPassantMove =
-            (movedPiece == 'P' || movedPiece == 'p') &&
-            move.fromCol != move.toCol &&
-            board.getPiece(move.toRow, move.toCol) == '.';
-
-        if (isKingMove || isEnPassantMove)
-        {
-            board.makeMove(move);
-            bool leavesKingInCheck = board.isKingInCheck(movingSide);
-            board.undoMove();
-
-            if (!leavesKingInCheck)
-                legalMoves.push_back(move);
-
-            continue;
-        }
-
-        if (inDoubleCheck)
-            continue;
-
-        if (inSingleCheck)
-        {
-            bool resolvesCheck = false;
-            for (auto& sq : blockSquares)
+            if (epRow == r + direction &&
+                std::abs(epCol - c) == 1)
             {
-                if (sq.first == move.toRow && sq.second == move.toCol)
+                // EP cannot be accepted blindly when it exposes the
+                // king to a rook/bishop/queen.
+                uint64_t newOcc = occupied;
+
+                newOcc &= ~bit(fromSq);
+                newOcc &= ~bit(epSq);
+
+                const int actualCapturedPawnSq =
+                    r * 8 + epCol;
+
+                newOcc &= ~bit(actualCapturedPawnSq);
+                newOcc |= bit(epSq);
+
+                uint64_t tempPieces[12];
+
+                for (int i = 0; i < 12; ++i)
+                    tempPieces[i] = board.pieceBB[i];
+
+                tempPieces[MY_PAWN] &= ~bit(fromSq);
+                tempPieces[MY_PAWN] |= bit(epSq);
+                tempPieces[EN_PAWN] &= ~bit(actualCapturedPawnSq);
+
+                if (!isSquareAttackedBB(
+                        kingSq,
+                        !white,
+                        newOcc,
+                        tempPieces))
                 {
-                    resolvesCheck = true;
-                    break;
+                    // In check, EP must also resolve the check.
+                    if (numberOfCheckers == 0 ||
+                        (evasionMask & bit(epSq)) ||
+                        (evasionMask & bit(actualCapturedPawnSq)))
+                    {
+                        legalMoves.emplace_back(
+                            r,
+                            c,
+                            epRow,
+                            epCol
+                        );
+                    }
                 }
             }
-            if (!resolvesCheck)
-                continue;
         }
+    }
 
-        bool isPinned = false;
-        int pinDRow = 0, pinDCol = 0;
 
-        for (auto& p : pinned)
+    uint64_t knights = board.pieceBB[MY_KNIGHT];
+
+    while (knights)
+    {
+        const int fromSq = popLSB(knights);
+
+        uint64_t targets =
+            board.knightAttacks[fromSq] & ~ownOcc;
+
+        targets &= evasionMask;
+
+        // A knight cannot move along a pin.
+        if (pinned & bit(fromSq))
+            targets = 0;
+
+        while (targets)
         {
-            if (p.row == move.fromRow && p.col == move.fromCol)
-            {
-                isPinned = true;
-                pinDRow = p.dRow;
-                pinDCol = p.dCol;
-                break;
-            }
-        }
+            const int toSq = popLSB(targets);
 
-        if (isPinned)
+            legalMoves.emplace_back(
+                rowOf(fromSq),
+                colOf(fromSq),
+                rowOf(toSq),
+                colOf(toSq)
+            );
+        }
+    }
+
+    
+    uint64_t bishops = board.pieceBB[MY_BISHOP];
+
+    while (bishops)
+    {
+        const int fromSq = popLSB(bishops);
+
+        uint64_t targets =
+            bishopAttacks(fromSq, occupied) & ~ownOcc;
+
+        targets &= evasionMask;
+
+        if (pinned & bit(fromSq))
+            targets &= pinMasks[fromSq];
+
+        while (targets)
         {
-            int dRow = move.toRow - move.fromRow;
-            int dCol = move.toCol - move.fromCol;
-            bool collinear = (dRow * pinDCol - dCol * pinDRow) == 0;
+            const int toSq = popLSB(targets);
 
-            if (!collinear)
-                continue;
+            legalMoves.emplace_back(
+                rowOf(fromSq),
+                colOf(fromSq),
+                rowOf(toSq),
+                colOf(toSq)
+            );
         }
+    }
 
-        legalMoves.push_back(move);
+    uint64_t rooks = board.pieceBB[MY_ROOK];
+
+    while (rooks)
+    {
+        const int fromSq = popLSB(rooks);
+
+        uint64_t targets =
+            rookAttacks(fromSq, occupied) & ~ownOcc;
+
+        targets &= evasionMask;
+
+        if (pinned & bit(fromSq))
+            targets &= pinMasks[fromSq];
+
+        while (targets)
+        {
+            const int toSq = popLSB(targets);
+
+            legalMoves.emplace_back(
+                rowOf(fromSq),
+                colOf(fromSq),
+                rowOf(toSq),
+                colOf(toSq)
+            );
+        }
+    }
+
+    // ------------------------------------------------------------
+    // Queens
+    // ------------------------------------------------------------
+
+    uint64_t queens = board.pieceBB[MY_QUEEN];
+
+    while (queens)
+    {
+        const int fromSq = popLSB(queens);
+
+        uint64_t targets =
+            (bishopAttacks(fromSq, occupied) |
+             rookAttacks(fromSq, occupied))
+            & ~ownOcc;
+
+        targets &= evasionMask;
+
+        if (pinned & bit(fromSq))
+            targets &= pinMasks[fromSq];
+
+        while (targets)
+        {
+            const int toSq = popLSB(targets);
+
+            legalMoves.emplace_back(
+                rowOf(fromSq),
+                colOf(fromSq),
+                rowOf(toSq),
+                colOf(toSq)
+            );
+        }
+    }
+
+    if (numberOfCheckers == 0)
+    {
+        Move kingSideCastle(
+            kingRow,
+            kingCol,
+            kingRow,
+            kingCol + 2
+        );
+
+        Move queenSideCastle(
+            kingRow,
+            kingCol,
+            kingRow,
+            kingCol - 2
+        );
+
+        if (board.isValidCastle(kingSideCastle))
+            legalMoves.push_back(kingSideCastle);
+
+        if (board.isValidCastle(queenSideCastle))
+            legalMoves.push_back(queenSideCastle);
     }
 
     return legalMoves;
 }
 //Generating pseudo-legal move of pawn
-void MoveGenerator::generatePawnMoves(Board& board, int row, int col, std::vector<Move>& moves)
-{
-    char piece = board.getPiece(row, col);
-    
-
-    // White pawn
-    if (piece == 'P')
-    {
-        // One square forward
-      if (row - 1 >= 0 &&
-    board.getPiece(row - 1, col) == '.')
-{
-    // Promotion
-    if (row - 1 == 0)
-    {
-        moves.push_back(Move(row, col, row - 1, col, 'Q'));
-        moves.push_back(Move(row, col, row - 1, col, 'R'));
-        moves.push_back(Move(row, col, row - 1, col, 'B'));
-        moves.push_back(Move(row, col, row - 1, col, 'N'));
-    }
-    else
-    {
-        // Normal pawn move
-        moves.push_back(
-            Move(row, col, row - 1, col)
-        );
-
-        // Two squares from starting rank
-        if (row == 6 &&
-            board.getPiece(row - 2, col) == '.')
-        {
-            moves.push_back(
-                Move(row, col, row - 2, col)
-            );
-        }
-    }
-}
-        // Capture diagonally left
-       if (row - 1 >= 0 && col - 1 >= 0 &&
-    board.isBlackPiece(board.getPiece(row - 1, col - 1)))
-{
-    // Capture promotion
-    if (row - 1 == 0)
-    {
-        moves.push_back(
-            Move(row, col, row - 1, col - 1, 'Q')
-        );
-
-        moves.push_back(
-            Move(row, col, row - 1, col - 1, 'R')
-        );
-
-        moves.push_back(
-            Move(row, col, row - 1, col - 1, 'B')
-        );
-
-        moves.push_back(
-            Move(row, col, row - 1, col - 1, 'N')
-        );
-    }
-    else
-    {
-        moves.push_back(
-            Move(row, col, row - 1, col - 1)
-        );
-    }
-}
-
-        // Capture diagonally right
-       if (row - 1 >= 0 && col + 1 <= 7 &&
-    board.isBlackPiece(board.getPiece(row - 1, col + 1)))
-{
-    // Capture promotion
-    if (row - 1 == 0)
-    {
-        moves.push_back(
-            Move(row, col, row - 1, col + 1, 'Q')
-        );
-
-        moves.push_back(
-            Move(row, col, row - 1, col + 1, 'R')
-        );
-
-        moves.push_back(
-            Move(row, col, row - 1, col + 1, 'B')
-        );
-
-        moves.push_back(
-            Move(row, col, row - 1, col + 1, 'N')
-        );
-    }
-    else
-    {
-        moves.push_back(
-            Move(row, col, row - 1, col + 1)
-        );
-    }
- }
- // White en passant
-int enPassantSquare = board.getEnPassantSquare();
-
-if (enPassantSquare != -1)
-{
-    int epRow = enPassantSquare / 8;
-    int epCol = enPassantSquare % 8;
-
-    // White pawn must be on the 5th rank
-    if (row == 3)
-    {
-        // Capture to the left
-        if (epRow == row - 1 &&
-            epCol == col - 1)
-        {
-            moves.push_back(
-                Move(row, col, epRow, epCol)
-            );
-        }
-
-        // Capture to the right
-        if (epRow == row - 1 &&
-            epCol == col + 1)
-        {
-            moves.push_back(
-                Move(row, col, epRow, epCol)
-            );
-        }
-    }
-}
-
-
-}
-
-    // Black pawn
-    else if (piece == 'p')
-    {
-        // One square forward
-       if (row + 1 <= 7 &&
-    board.getPiece(row + 1, col) == '.')
-{
-    // Promotion
-    if (row + 1 == 7)
-    {
-        moves.push_back(
-            Move(row, col, row + 1, col, 'Q')
-        );
-
-        moves.push_back(
-            Move(row, col, row + 1, col, 'R')
-        );
-
-        moves.push_back(
-            Move(row, col, row + 1, col, 'B')
-        );
-
-        moves.push_back(
-            Move(row, col, row + 1, col, 'N')
-        );
-    }
-    else
-    {
-        // Normal move
-        moves.push_back(Move(row, col, row + 1, col));
-
-        // Two squares from starting rank
-        if (row == 1 && board.getPiece(row + 2, col) == '.')
-        {
-            moves.push_back(Move(row, col, row + 2, col));
-        }
-    }
-}
-       
-if (row + 1 <= 7 && col - 1 >= 0 &&
-    board.isWhitePiece(board.getPiece(row + 1, col - 1)))
-{
-    // Capture promotion
-    if (row + 1 == 7)
-    {
-        moves.push_back(
-            Move(row, col, row + 1, col - 1, 'Q')
-        );
-
-        moves.push_back(
-            Move(row, col, row + 1, col - 1, 'R')
-        );
-
-        moves.push_back(
-            Move(row, col, row + 1, col - 1, 'B')
-        );
-
-        moves.push_back(
-            Move(row, col, row + 1, col - 1, 'N')
-        );
-    }
-    else
-    {
-        moves.push_back(
-            Move(row, col, row + 1, col - 1)
-        );
-    }
-}
-
-// Capture diagonally right
-if (row + 1 <= 7 && col + 1 <= 7 &&
-    board.isWhitePiece(board.getPiece(row + 1, col + 1)))
-{
-    // Capture promotion
-    if (row + 1 == 7)
-    {
-        moves.push_back(
-            Move(row, col, row + 1, col + 1, 'Q')
-        );
-
-        moves.push_back(
-            Move(row, col, row + 1, col + 1, 'R')
-        );
-
-        moves.push_back(
-            Move(row, col, row + 1, col + 1, 'B')
-        );
-
-        moves.push_back(
-            Move(row, col, row + 1, col + 1, 'N')
-        );
-    }
-    else
-    {
-        moves.push_back(
-            Move(row, col, row + 1, col + 1)
-        );
-    }
-}
-// Black en passant
-int enPassantSquare = board.getEnPassantSquare();
-
-if (enPassantSquare != -1)
-{
-    int epRow = enPassantSquare / 8;
-    int epCol = enPassantSquare % 8;
-
-    // Black pawn must be on the 4th rank
-    if (row == 4)
-    {
-        // Capture to the left
-        if (epRow == row + 1 &&
-            epCol == col - 1)
-        {
-            moves.push_back(
-                Move(row, col, epRow, epCol)
-            );
-        }
-
-        // Capture to the right
-        if (epRow == row + 1 &&
-            epCol == col + 1)
-        {
-            moves.push_back(
-                Move(row, col, epRow, epCol)
-            );
-        }
-    }
-}
-
-    }
-}
-
-//Knight pseudo-move generator
-void MoveGenerator::generateKnightMoves(Board& board,int row,int col,std::vector<Move>& moves)
-{
-    char piece = board.getPiece(row, col);
-
-    if (piece != 'N' && piece != 'n')
-        return;
-
-    const int knightMoves[8][2] =
-    {
-        {-2, -1},
-        {-2,  1},
-        {-1, -2},
-        {-1,  2},
-        { 1, -2},
-        { 1,  2},
-        { 2, -1},
-        { 2,  1}
-    };
-
-    for (int i = 0; i < 8; i++)
-    {
-        int newRow = row + knightMoves[i][0];
-        int newCol = col + knightMoves[i][1];
-
-        // Outside board
-        if (newRow < 0 || newRow > 7 ||
-            newCol < 0 || newCol > 7)
-        {
-            continue;
-        }
-
-        char destination = board.getPiece(newRow, newCol);
-
-        // Cannot capture own piece
-        if (piece == 'N' && board.isWhitePiece(destination))
-            continue;
-
-        if (piece == 'n' && board.isBlackPiece(destination))
-            continue;
-
-        moves.push_back(
-            Move(row, col, newRow, newCol)
-        );
-    }
-
-}
-
-// Bishop + Queen diagonal pseudo-legal moves
-void MoveGenerator::generateBishopMoves(Board& board,int row,int col,std::vector<Move>& moves)
-{
-    char piece = board.getPiece(row, col);
-
-    if (piece != 'B' && piece != 'b' &&
-        piece != 'Q' && piece != 'q')
-        return;
-
-    const int directions[4][2] =
-    {
-        {-1, -1},
-        {-1,  1},
-        { 1, -1},
-        { 1,  1}
-    };
-
-    for (int i = 0; i < 4; i++)
-    {
-        int newRow = row + directions[i][0];
-        int newCol = col + directions[i][1];
-
-        while (newRow >= 0 && newRow < 8 &&
-               newCol >= 0 && newCol < 8)
-        {
-            char destination =
-                board.getPiece(newRow, newCol);
-
-            // Friendly piece blocks movement
-            if ((piece == 'B' || piece == 'Q') &&
-                board.isWhitePiece(destination))
-                break;
-
-            if ((piece == 'b' || piece == 'q') &&
-                board.isBlackPiece(destination))
-                break;
-
-            // Empty square OR enemy piece
-            moves.push_back(
-                Move(row, col, newRow, newCol)
-            );
-
-            // Enemy piece was captured -> STOP
-            if ((piece == 'B' || piece == 'Q') &&
-                board.isBlackPiece(destination))
-            {
-                break;
-            }
-
-            if ((piece == 'b' || piece == 'q') &&
-                board.isWhitePiece(destination))
-            {
-                break;
-            }
-
-            newRow += directions[i][0];
-            newCol += directions[i][1];
-        }
-    }
-}
-
-
-// Rook + Queen straight pseudo-legal moves
-void MoveGenerator::generateRookMoves(Board& board,int row,int col,std::vector<Move>& moves)
-{
-    char piece = board.getPiece(row, col);
-
-    if (piece != 'R' && piece != 'r' &&
-        piece != 'Q' && piece != 'q')
-        return;
-
-    const int directions[4][2] =
-    {
-        {-1, 0},
-        { 1, 0},
-        { 0,-1},
-        { 0, 1}
-    };
-
-    for (int i = 0; i < 4; i++)
-    {
-        int newRow = row + directions[i][0];
-        int newCol = col + directions[i][1];
-
-        while (newRow >= 0 && newRow < 8 &&
-               newCol >= 0 && newCol < 8)
-        {
-            char destination =
-                board.getPiece(newRow, newCol);
-
-            // Friendly piece blocks movement
-            if ((piece == 'R' || piece == 'Q') &&
-                board.isWhitePiece(destination))
-                break;
-
-            if ((piece == 'r' || piece == 'q') &&
-                board.isBlackPiece(destination))
-                break;
-
-            // Empty square OR enemy piece
-            moves.push_back(
-                Move(row, col, newRow, newCol)
-            );
-
-            // Enemy piece was captured -> STOP
-            if ((piece == 'R' || piece == 'Q') &&
-                board.isBlackPiece(destination))
-            {
-                break;
-            }
-
-            if ((piece == 'r' || piece == 'q') &&
-                board.isWhitePiece(destination))
-            {
-                break;
-            }
-
-            newRow += directions[i][0];
-            newCol += directions[i][1];
-        }
-    }
-}
-//Queen pseudo-legal moves
-void MoveGenerator::generateQueenMoves(Board& board,int row,int col,std::vector<Move>& moves)
-{
-    char piece = board.getPiece(row, col);
-
-    if (piece != 'Q' && piece != 'q')
-        return;
-
-    generateBishopMoves(board, row, col, moves);
-    generateRookMoves(board, row, col, moves);
-}
-
-//King pseudo-legal moves
-void MoveGenerator::generateKingMoves(Board& board, int row, int col,std::vector<Move>& moves)
-{
-    char piece = board.getPiece(row, col);
-
-    if (piece != 'K' && piece != 'k')
-        return;
-
-    const int directions[8][2] =
-    {
-        {-1, -1},
-        {-1,  0},
-        {-1,  1},
-        { 0, -1},
-        { 0,  1},
-        { 1, -1},
-        { 1,  0},
-        { 1,  1}
-    };
-
-    for (int i = 0; i < 8; i++)
-    {
-        int newRow = row + directions[i][0];
-        int newCol = col + directions[i][1];
-
-        if (newRow < 0 || newRow > 7 ||
-            newCol < 0 || newCol > 7)
-        {
-            continue;
-        }
-
-        char destination =
-            board.getPiece(newRow, newCol);
-
-        // Cannot capture own piece
-        if (piece == 'K' && board.isWhitePiece(destination))
-            continue;
-
-        if (piece == 'k' && board.isBlackPiece(destination))
-            continue;
-
-        moves.push_back(
-            Move(row, col, newRow, newCol)
-        );
-    }
-
-    // Castling (king moves two squares toward a rook)
-    Move kingSideCastle(row, col, row, col + 2);
-    Move queenSideCastle(row, col, row, col - 2);
-
-    if (board.isValidCastle(kingSideCastle))
-    {
-        moves.push_back(kingSideCastle);
-    }
-
-    if (board.isValidCastle(queenSideCastle))
-    {
-        moves.push_back(queenSideCastle);
-    }
-}

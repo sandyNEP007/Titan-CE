@@ -21,12 +21,11 @@ public:
     static void clearTranspositionTable();
 
     static long long nodes;
-    static long long cutoffs;
-
-    static long long qNodes;
-    static long long qCutoffs;
+  
     static long long ttHits;
-
+    static long long depth;
+    static long long nps;
+   
 private:
 enum TTFlag
 {

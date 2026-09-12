@@ -42,6 +42,7 @@ public:
     static int evaluateConnectedPassedPawns(const Board& board);
     static int evaluatePawnAdvancement(const Board& board);
     static int evaluateCastling(Board& board, int phase);
+    static int evaluatePinnedPieces(const Board& board, int row, int col, bool byWhite);
 
 private:
     static int getPieceValue(char piece);
@@ -50,6 +51,12 @@ private:
     static bool isPawnAttackingSquare(const Board& board, int row, int col, bool byWhite);
     static bool isSquareAttackedByMinorPiece(const Board& board, int row, int col, bool byWhite );
     static bool isSquareAttackedByMajorPiece(const Board& board, int row,int col,bool byWhite);
+static int isPinned(Board& board, int row, int col, bool byWhite,
+    int ownKingRow, int ownKingCol);
+static int evaluatePinnedPieces(Board& board,
+    int whiteKingRow, int whiteKingCol, int blackKingRow, int blackKingCol);
+
+
 
 };
 

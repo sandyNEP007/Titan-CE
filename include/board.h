@@ -36,6 +36,7 @@ struct UndoInfo
 
 class Board{
 private:
+    friend class MoveGenerator;
     char board[8][8];
     Move lastMove;
     std::vector<UndoInfo> history;

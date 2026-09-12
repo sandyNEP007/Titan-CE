@@ -289,7 +289,7 @@ void UCI::handleGo(const std::string& command)
     std::string token;
     ss >> token; // "go"
 
-    int depth = 10;
+    int depth = 7;
     long long movetime = 0;
     long long wtime = 0, btime = 0, winc = 0, binc = 0;
     bool hasMovetime = false;
@@ -305,28 +305,39 @@ void UCI::handleGo(const std::string& command)
         else if (token == "binc")    { ss >> binc; }
     }
 
-        long long timeLimitMs = 0;
+       long long timeLimitMs = 0;
 
-    if (hasMovetime)
-        timeLimitMs = movetime - 50;
-    else if (hasClock)
-    {
-        long long myTime = board.isWhiteTurn() ? wtime : btime;
-        long long myInc  = board.isWhiteTurn() ? winc  : binc;
-        timeLimitMs = myTime / 30 + myInc - 50;
-    }
-    else
-    {
-        // No movetime/clock given (e.g. bare "go depth 10") — use a
-        // sensible default budget instead of running unbounded.
-        timeLimitMs = 40000 - 50;
-    }
+if (hasMovetime)
+{
+    timeLimitMs = movetime - 50;
+}
+else if (hasClock)
+{
+    long long myTime = board.isWhiteTurn() ? wtime : btime;
+    long long myInc  = board.isWhiteTurn() ? winc  : binc;
 
-    if (timeLimitMs < 50)
-        timeLimitMs = 50;
+  
+    //to spend more of remaining time reduce the devisor ie 20ms
+    timeLimitMs = myTime / 20 + myInc - 50; 
+}
 
-    Move bestMove = EngineSearch::findBestMove(board, 10, timeLimitMs);
+else
+{
+   
+    timeLimitMs = 30000; // e.g. 50 seconds default per move
+}
 
+// Lower bound safety check
+if (timeLimitMs < 5000)
+    timeLimitMs = 5000;
+
+//max time allowed to make a move
+if (timeLimitMs > 30000) 
+    timeLimitMs = 30000;
+
+
+    Move bestMove = EngineSearch::findBestMove(board, depth, timeLimitMs);
+    std::cout<<"info depth "<<depth<<std::endl;
     std::cout << "bestmove ";
     printMove(bestMove);
     std::cout << "\n";

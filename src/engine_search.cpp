@@ -10,11 +10,11 @@
 int EngineSearch::historyTable[2][64][64] = {};
 Move EngineSearch::killerMoves[EngineSearch::MAX_PLY][2];
 EngineSearch::TTEntry EngineSearch::transpositionTable[EngineSearch::TT_SIZE] = {};
-long long EngineSearch::nodes = 0;
-long long EngineSearch::cutoffs = 0;
-long long EngineSearch::qNodes = 0;
-long long EngineSearch::qCutoffs = 0;
+
 long long EngineSearch::ttHits = 0;
+long long EngineSearch::depth = 0;
+long long EngineSearch::nps = 0;
+long long EngineSearch::nodes = 0;
 std::chrono::steady_clock::time_point EngineSearch::searchDeadline{};
 bool EngineSearch::stopSearch = false;
 
@@ -265,7 +265,7 @@ int EngineSearch::negamax(Board& board, int alpha, int beta, int depth, int ply)
     bool hasHashMove = false;
 
     //transposition
-       //transposition
+
     TTEntry& ttSlot = transpositionTable[hash & (TT_SIZE - 1)];
 
     if (ttSlot.hash == hash)
@@ -325,7 +325,7 @@ int EngineSearch::negamax(Board& board, int alpha, int beta, int depth, int ply)
 
         if (nullScore >= beta)
         {
-            cutoffs++;
+           
             return beta;
         }
     }
@@ -464,7 +464,7 @@ int EngineSearch::negamax(Board& board, int alpha, int beta, int depth, int ply)
 
         if (alpha >= beta)
         {
-            cutoffs++;
+            
 
             if (isQuiet)
             {
@@ -521,14 +521,9 @@ int EngineSearch::negamax(Board& board, int alpha, int beta, int depth, int ply)
 
 int EngineSearch::quiescence(Board& board, int alpha, int beta, int checkPly)
 {
-    qNodes++;
+    
 
-    if ((qNodes & 4095) == 0 && checkTimeUp())
-    {
-        stopSearch = true;
-        return 0;
-    }
-
+    
     int evaluation = Evaluation::boardEvaluation(board);
     int standPat = board.isWhiteTurn() ? evaluation : -evaluation;
 
@@ -539,7 +534,7 @@ int EngineSearch::quiescence(Board& board, int alpha, int beta, int checkPly)
     {
         if (standPat >= beta)
         {
-            qCutoffs++;
+            
             return beta;
         }
         if (standPat > alpha)
@@ -608,7 +603,7 @@ int EngineSearch::quiescence(Board& board, int alpha, int beta, int checkPly)
 
         if (score >= beta)
         {
-            qCutoffs++;
+           
             return beta;
         }
         if (score > alpha)
@@ -634,9 +629,7 @@ Move EngineSearch::findBestMove(Board& board, int maxdepth, long long timeLimitM
         searchDeadline = std::chrono::steady_clock::time_point{};
 
     nodes = 0;
-    cutoffs = 0;
-    qNodes = 0;
-    qCutoffs = 0;
+    
     ttHits = 0;
 
     for (int side = 0; side < 2; side++)
@@ -658,6 +651,7 @@ Move EngineSearch::findBestMove(Board& board, int maxdepth, long long timeLimitM
 
     for (int depth = 1; depth <= maxdepth; depth++)
     {
+     
         if (depth > 1 &&
             !hasTimeForNextDepth(searchStart, timeLimitMs, lastDepthMs))
         {
@@ -666,8 +660,9 @@ Move EngineSearch::findBestMove(Board& board, int maxdepth, long long timeLimitM
 
         auto depthStart = std::chrono::steady_clock::now();
 
-        std::vector<Move> legalMoves =
-            MoveGenerator::generateLegalMoves(board);
+        std::vector<Move> legalMoves = MoveGenerator::generateLegalMoves(board);
+       
+        
 
         std::stable_sort(
             legalMoves.begin(),
@@ -766,7 +761,11 @@ Move EngineSearch::findBestMove(Board& board, int maxdepth, long long timeLimitM
         if (lastDepthMs < 1)
             lastDepthMs = 1;
     }
+     unsigned long long nps = (nodes * 1000) / lastDepthMs;
 
+    std::cout <<  " nodes " << nodes<<std::endl;
+    std::cout << " nps " << nps << std::endl;
+  
     return bestMove;
 }
 
