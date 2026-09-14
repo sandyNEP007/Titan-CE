@@ -1,6 +1,7 @@
 #include "uci.h"
 #include "movegen.h"
 #include "engine_search.h"
+#include "opening_book.h"
 
 #include <iostream>
 #include <sstream>
@@ -324,24 +325,55 @@ else if (hasClock)
 else
 {
    
-    timeLimitMs = 30000; // e.g. 50 seconds default per move
+    timeLimitMs = 50000; // e.g. 50 seconds default per move
 }
 
 // Lower bound safety check
-if (timeLimitMs < 5000)
-    timeLimitMs = 5000;
+if (timeLimitMs < 2500)
+    timeLimitMs = 2500;
 
 //max time allowed to make a move
-if (timeLimitMs > 30000) 
-    timeLimitMs = 30000;
+if (timeLimitMs > 50000) 
+    timeLimitMs = 50000;
 
 
-    Move bestMove = EngineSearch::findBestMove(board, depth, timeLimitMs);
+      Move bookMove;
+    if (OpeningBook::getBookMove(board.getZobristHash(), bookMove))
+    {
+        std::vector<Move> legalMoves = MoveGenerator::generateLegalMoves(board);
+        bool bookMoveIsLegal = false;
+
+        for (const Move& m : legalMoves)
+        {
+            if (m.fromRow == bookMove.fromRow &&
+                m.fromCol == bookMove.fromCol &&
+                m.toRow   == bookMove.toRow &&
+                m.toCol   == bookMove.toCol &&
+                m.promotion == bookMove.promotion)
+            {
+                bookMoveIsLegal = true;
+                break;
+            }
+        }
+
+        if (bookMoveIsLegal)
+        {
+            std::cout << "info string book move\n";
+            std::cout << "bestmove ";
+            printMove(bookMove);
+            std::cout << "\n";
+            std::cout.flush();
+            return;
+        }
+    }
+
+    Move bestMove = EngineSearch::findBestMove(board, 12, timeLimitMs);
     std::cout<<"info depth "<<depth<<std::endl;
     std::cout << "bestmove ";
     printMove(bestMove);
     std::cout << "\n";
     std::cout.flush();
+
 }
 
 void UCI::handleSetOption(const std::string& command)
@@ -366,6 +398,8 @@ void UCI::loop()
             std::cout << "id author Sandeep Poudel\n";
             std::cout << "option name UCI_LimitStrength type check default false\n";
             std::cout << "option name UCI_Elo type spin default 1400 min 100 max 4000\n";
+             if (!OpeningBook::isLoaded())
+                OpeningBook::load("book.txt");
 
             std::cout << "uciok\n";
 

@@ -6,12 +6,13 @@
 #include <iostream>
 #include <chrono>
 #include <cctype>
+#include "move_picker.h"
 
 int EngineSearch::historyTable[2][64][64] = {};
 Move EngineSearch::killerMoves[EngineSearch::MAX_PLY][2];
 EngineSearch::TTEntry EngineSearch::transpositionTable[EngineSearch::TT_SIZE] = {};
-
 long long EngineSearch::ttHits = 0;
+long long EngineSearch::cutoffs = 0;
 long long EngineSearch::depth = 0;
 long long EngineSearch::nps = 0;
 long long EngineSearch::nodes = 0;
@@ -175,10 +176,7 @@ int EngineSearch::seeValue(char piece)
     return 0;
 }
 
-// Standard "swap-off" SEE: walks the full capture sequence on the target
-// square (both sides always using their cheapest available attacker) and
-// returns the net material result for the side making `move`, assuming
-// both sides play the exchange optimally.
+
 int EngineSearch::see(Board& board, const Move& move)
 {
     char victim = board.getPiece(move.toRow, move.toCol);
@@ -248,8 +246,8 @@ int EngineSearch::see(Board& board, const Move& move)
 //search the moves
 int EngineSearch::negamax(Board& board, int alpha, int beta, int depth, int ply)
 {
-    nodes++;
-
+    
+nodes++;
     if (stopSearch)
         return 0;
 
@@ -263,9 +261,9 @@ int EngineSearch::negamax(Board& board, int alpha, int beta, int depth, int ply)
     int originalAlpha = alpha;
     Move hashMove;
     bool hasHashMove = false;
-
-    //transposition
-
+    
+     if (ply > 0 && board.isThreefoldRepetition())
+        return 0;
     TTEntry& ttSlot = transpositionTable[hash & (TT_SIZE - 1)];
 
     if (ttSlot.hash == hash)
@@ -330,26 +328,8 @@ int EngineSearch::negamax(Board& board, int alpha, int beta, int depth, int ply)
         }
     }
 
-    // Generate all legal moves
+      // Generate all legal moves
     std::vector<Move> legalMoves = MoveGenerator::generateLegalMoves(board);
-
-    std::stable_sort(
-        legalMoves.begin(),
-        legalMoves.end(),
-        [&](const Move& a, const Move& b)
-        {
-            int scoreA = getMoveOrderingScore(board, a, depth);
-            int scoreB = getMoveOrderingScore(board, b, depth);
-
-            if (hasHashMove && a == hashMove)
-                scoreA += 1000000;
-
-            if (hasHashMove && b == hashMove)
-                scoreB += 1000000;
-
-            return scoreA > scoreB;
-        }
-    );
 
     // No legal moves
     if (legalMoves.empty())
@@ -363,11 +343,14 @@ int EngineSearch::negamax(Board& board, int alpha, int beta, int depth, int ply)
         return 0;
     }
 
+    MovePicker picker(board, legalMoves, hasHashMove ? hashMove : Move(), depth);
+
     int bestScore = -1000000;
     Move bestMove;
     int moveIndex = 0;
 
-    for (const Move& move : legalMoves)
+    Move move;
+    while ((move = picker.nextMove()).fromRow != -1)
     {
         // Must check BEFORE making the move — after makeMove, getPiece(to)
         // always shows the mover's own piece, never '.'.
@@ -465,7 +448,7 @@ int EngineSearch::negamax(Board& board, int alpha, int beta, int depth, int ply)
         if (alpha >= beta)
         {
             
-
+            cutoffs++;
             if (isQuiet)
             {
                 if (depth < MAX_PLY)
@@ -575,14 +558,23 @@ int EngineSearch::quiescence(Board& board, int alpha, int beta, int checkPly)
         }
     }
 
-    std::stable_sort(
-        tacticalMoves.begin(),
-        tacticalMoves.end(),
-        [&](const Move& a, const Move& b)
-        {
-            return see(board, a) > see(board, b);
-        }
-    );
+        std::vector<int> tacticalScores;
+    tacticalScores.reserve(tacticalMoves.size());
+    for (const Move& m : tacticalMoves)
+        tacticalScores.push_back(see(board, m));
+
+    std::vector<int> order(tacticalMoves.size());
+    for (size_t i = 0; i < order.size(); i++) order[i] = (int)i;
+
+    std::sort(order.begin(), order.end(), [&](int a, int b)
+    {
+        return tacticalScores[a] > tacticalScores[b];
+    });
+
+    std::vector<Move> sortedTactical;
+    sortedTactical.reserve(tacticalMoves.size());
+    for (int i : order) sortedTactical.push_back(tacticalMoves[i]);
+    tacticalMoves = std::move(sortedTactical);
 
     int movesSearched = 0;
 
@@ -629,7 +621,7 @@ Move EngineSearch::findBestMove(Board& board, int maxdepth, long long timeLimitM
         searchDeadline = std::chrono::steady_clock::time_point{};
 
     nodes = 0;
-    
+    cutoffs = 0;
     ttHits = 0;
 
     for (int side = 0; side < 2; side++)
@@ -651,7 +643,9 @@ Move EngineSearch::findBestMove(Board& board, int maxdepth, long long timeLimitM
 
     for (int depth = 1; depth <= maxdepth; depth++)
     {
+     std::cout << "Searching depth " << depth << "..." << std::endl;
      
+
         if (depth > 1 &&
             !hasTimeForNextDepth(searchStart, timeLimitMs, lastDepthMs))
         {
@@ -660,27 +654,7 @@ Move EngineSearch::findBestMove(Board& board, int maxdepth, long long timeLimitM
 
         auto depthStart = std::chrono::steady_clock::now();
 
-        std::vector<Move> legalMoves = MoveGenerator::generateLegalMoves(board);
-       
-        
-
-        std::stable_sort(
-            legalMoves.begin(),
-            legalMoves.end(),
-            [&](const Move& a, const Move& b)
-            {
-                int scoreA = getMoveOrderingScore(board, a, depth);
-                int scoreB = getMoveOrderingScore(board, b, depth);
-
-                if (a == previousBestMove)
-                    scoreA += 100000;
-
-                if (b == previousBestMove)
-                    scoreB += 100000;
-
-                return scoreA > scoreB;
-            }
-        );
+            std::vector<Move> legalMoves = MoveGenerator::generateLegalMoves(board);
 
         int currentBestScore = -1000000;
         Move currentBestMove;
@@ -699,20 +673,41 @@ Move EngineSearch::findBestMove(Board& board, int maxdepth, long long timeLimitM
             beta = previousScore + ASPIRATION_WINDOW;
         }
 
+        int window = ASPIRATION_WINDOW;
+
         while (true)
         {
             currentBestScore = -1000000;
 
             int searchAlpha = alpha;
             int searchBeta = beta;
+            int moveIndex = 0;
 
-            for (const Move& move : legalMoves)
+            MovePicker picker(board, legalMoves, previousBestMove, depth);
+
+            Move move;
+            while ((move = picker.nextMove()).fromRow != -1)
             {
                 board.makeMove(move);
 
-                int score = -negamax(board, -searchBeta, -searchAlpha, depth - 1, 1);
+                int score;
+
+                if (moveIndex == 0)
+                {
+                    score = -negamax(board, -searchBeta, -searchAlpha, depth - 1, 1);
+                }
+                else
+                {
+                    score = -negamax(board, -searchAlpha - 1, -searchAlpha, depth - 1, 1);
+
+                    if (!stopSearch && score > searchAlpha && score < searchBeta)
+                    {
+                        score = -negamax(board, -searchBeta, -searchAlpha, depth - 1, 1);
+                    }
+                }
 
                 board.undoMove();
+                moveIndex++;
 
                 if (stopSearch)
                     break;
@@ -736,15 +731,16 @@ Move EngineSearch::findBestMove(Board& board, int maxdepth, long long timeLimitM
                 break;
             }
 
+            // Progressive widening instead of jumping straight to an
+            // unbounded window — most fails only miss by a little.
+            window *= 4;
+            if (window > 1000000) window = 1000000;
+
             if (currentBestScore <= alpha)
-            {
-                alpha = -1000000;
-            }
+                alpha = std::max(-1000000, previousScore - window);
 
             if (currentBestScore >= beta)
-            {
-                beta = 1000000;
-            }
+                beta = std::min(1000000, previousScore + window);
         }
 
         if (stopSearch)
@@ -761,10 +757,26 @@ Move EngineSearch::findBestMove(Board& board, int maxdepth, long long timeLimitM
         if (lastDepthMs < 1)
             lastDepthMs = 1;
     }
-     unsigned long long nps = (nodes * 1000) / lastDepthMs;
+         auto searchEnd = std::chrono::steady_clock::now();
+    long long totalMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+        searchEnd - searchStart
+    ).count();
+    if (totalMs < 1) totalMs = 1;
+
+    unsigned long long nps = ((unsigned long long)nodes * 1000) / (unsigned long long)totalMs;
+    char fromFile = 'a' + bestMove.fromCol;
+    char fromRank = '8' - bestMove.fromRow;
+
+    char toFile = 'a' + bestMove.toCol;
+    char toRank = '8' - bestMove.toRow;
+
+    std::cout << fromFile << fromRank
+              << toFile << toRank<<std::endl;
 
     std::cout <<  " nodes " << nodes<<std::endl;
     std::cout << " nps " << nps << std::endl;
+    std::cout << " cutoffs " << cutoffs << std::endl;
+
   
     return bestMove;
 }

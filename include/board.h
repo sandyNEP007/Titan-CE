@@ -31,6 +31,7 @@ struct UndoInfo
     int enPassantCapturedCol;
     bool previousBlackHasCastled;
     bool previousWhiteHasCastled;
+
        
 };
 
@@ -56,6 +57,8 @@ private:
     uint64_t whiteOccupancy;
     uint64_t blackOccupancy;
     uint64_t allOccupancy;
+    std::vector<uint64_t> positionHistory;
+    
 
     enum PieceIndex
     {
@@ -120,6 +123,7 @@ bool hasBlackCastled() const
     bool canBlackQueenSideCastle() const;
     int getEnPassantSquare() const;
     uint64_t getZobristHash() const;
+    bool isThreefoldRepetition() const ;
    
 };
 #endif

@@ -9,10 +9,12 @@
 #include <vector>
 #include <chrono>
 
-
+class MovePicker;
 class EngineSearch
 {
+    
 public:
+    friend class MovePicker;
     static Move findBestMove(Board& board, int maxdepth, long long timeLimitMs = 0);
     static int getMoveOrderingScore(Board& board, const Move& move, int depth);
     static int getMVVLVAScore(Board& board, const Move& move);
@@ -23,8 +25,10 @@ public:
     static long long nodes;
   
     static long long ttHits;
+    static long long cutoffs;
     static long long depth;
     static long long nps;
+    
    
 private:
 enum TTFlag

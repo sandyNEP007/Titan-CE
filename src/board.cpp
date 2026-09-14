@@ -1106,6 +1106,8 @@ if (move.promotion != '\0')
     // Add new side-to-move
     zobristHash ^= Zobrist::getSideKey();
    recomputeOccupancy();
+    positionHistory.push_back(zobristHash);
+
 }
 void Board::undoMove()
 {
@@ -1232,7 +1234,31 @@ else
 zobristHash = undo.previousZobristHash;
 
 recomputeOccupancy();
+positionHistory.pop_back();
 
+}
+bool Board::isThreefoldRepetition() const
+{
+    if (positionHistory.empty())
+        return false;
+
+    uint64_t currentHash = positionHistory.back();
+    int repetitions = 0;
+
+    // Positions with the same side to move sit 2 plies apart, so step
+    // backward by 2 — no point comparing against the opponent's turns.
+    for (int i = (int)positionHistory.size() - 3; i >= 0; i -= 2)
+    {
+        if (positionHistory[i] == currentHash)
+        {
+            repetitions++;
+
+            if (repetitions >= 2)   // this occurrence is the 3rd — real draw
+                return true;
+        }
+    }
+
+    return false;
 }
 void Board::makeNullMove()
 {
