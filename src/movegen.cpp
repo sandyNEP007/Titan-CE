@@ -667,4 +667,4 @@ std::vector<Move> MoveGenerator::generateLegalMoves(Board& board)
 
     return legalMoves;
 }
-//Generating pseudo-legal move of pawn
+

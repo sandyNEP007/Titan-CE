@@ -9,7 +9,7 @@ uint64_t Zobrist::enPassantKeys[64];
 
 uint64_t Zobrist::random64()
 {
-    static std::mt19937_64 rng(std::random_device{}());
+    static std::mt19937_64 rng(0x9E3779B97F4A7C15ULL);
 
     return rng();
 }
