@@ -8,7 +8,7 @@ This project is being developed step by step to understand the internal architec
 
 # Current Version
 
-**v0.6**
+**1.0.0**
 
 ---
 
@@ -40,6 +40,7 @@ This project is being developed step by step to understand the internal architec
 ## Evaluation
 
 * ✅ Material Evaluation
+* ✅ Position Evaluation 
 
 ---
 
@@ -84,10 +85,11 @@ Titan-CE
 
 # Build
 
-Compile using:
+Compile
 
 ```bash
-g++ src/main.cpp src/board.cpp src/move.cpp src/game.cpp -Iinclude -o Titan-CE.exe
+g++ src/*.cpp -Iinclude -o Titan-CE
+
 ```
 
 Run:

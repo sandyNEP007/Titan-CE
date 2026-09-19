@@ -8,6 +8,7 @@
 #include <unordered_map>
 #include <vector>
 #include <chrono>
+#include <atomic>
 
 class MovePicker;
 class EngineSearch
@@ -15,12 +16,14 @@ class EngineSearch
     
 public:
     friend class MovePicker;
-    static Move findBestMove(Board& board, int maxdepth, long long timeLimitMs = 0);
+    static Move findBestMove(Board& board, int maxdepth, long long timeLimitMs = 0, bool ponder = false);
     static int getMoveOrderingScore(Board& board, const Move& move, int depth);
     static int getMVVLVAScore(Board& board, const Move& move);
     static int see(Board& board, const Move& move);
     static int seeValue(char piece);
     static void clearTranspositionTable();
+    static void requestStop();
+    static void ponderHit();
 
     static long long nodes;
   
@@ -46,8 +49,10 @@ struct TTEntry
     TTFlag flag;
     Move bestMove;
 };
+
     static std::chrono::steady_clock::time_point searchDeadline;
-    static bool stopSearch;
+   static std::atomic<bool> stopSearch;
+   static std::atomic<bool> ponderHitRequested;
     static bool checkTimeUp();
      static bool hasTimeForNextDepth(std::chrono::steady_clock::time_point searchStart,long long timeLimitMs,long long lastDepthMs);
     static const int LMR_MIN_DEPTH = 3;

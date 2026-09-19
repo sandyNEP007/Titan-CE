@@ -11,6 +11,9 @@
 #include "move.h"
 
 Board UCI::board;
+bool UCI::ponderEnabled = false;
+std::thread UCI::searchThread;
+std::atomic<bool> UCI::searchRunning{false};
 
 
 void UCI::show()
@@ -87,9 +90,7 @@ bool UCI::applyMove(const std::string& moveString)
 }
 
 
-// ============================================================
-// LOAD FEN
-// ============================================================
+
 
 bool UCI::loadFEN(const std::string& fen)
 {
@@ -284,8 +285,21 @@ void UCI::handlePosition(const std::string& command)
         << "info string Unsupported position type\n";
 }
 
+
+void UCI::stopSearchAndWait()
+{
+    if (searchRunning.load())
+        EngineSearch::requestStop();
+
+    if (searchThread.joinable())
+        searchThread.join();
+
+    searchRunning.store(false);
+}
+
 void UCI::handleGo(const std::string& command)
 {
+    stopSearchAndWait();
     std::stringstream ss(command);
     std::string token;
     ss >> token; // "go"
@@ -305,6 +319,7 @@ void UCI::handleGo(const std::string& command)
         else if (token == "winc")    { ss >> winc; }
         else if (token == "binc")    { ss >> binc; }
     }
+    bool ponder = command.find("ponder") != std::string::npos;
 
        long long timeLimitMs = 0;
 
@@ -367,20 +382,55 @@ if (timeLimitMs > 50000)
         }
     }
 
-    Move bestMove = EngineSearch::findBestMove(board, 12, timeLimitMs);
-    std::cout<<"info depth "<<depth<<std::endl;
+   Board searchBoard = board;
+
+searchRunning.store(true);
+
+searchThread = std::thread([searchBoard, depth, timeLimitMs, ponder]() mutable
+{
+    Move bestMove = EngineSearch::findBestMove(searchBoard, depth, timeLimitMs, ponder);
+
     std::cout << "bestmove ";
-    printMove(bestMove);
+    UCI::printMove(bestMove);
     std::cout << "\n";
     std::cout.flush();
 
+    UCI::searchRunning.store(false);
+});
+
+}
+
+void UCI::handlePonderHit()
+{
+    EngineSearch::ponderHit();
 }
 
 void UCI::handleSetOption(const std::string& command)
 {
-   
+    std::stringstream ss(command);
 
-    (void)command;
+    std::string token;
+    std::string optionName;
+    std::string value;
+
+    ss >> token; // "setoption"
+    ss >> token; // "name"
+    ss >> optionName;
+
+    if (optionName == "Ponder")
+    {
+        ss >> token; // "value"
+        ss >> value;
+
+        if (value == "true")
+        {
+            ponderEnabled = true;
+        }
+        else if (value == "false")
+        {
+            ponderEnabled = false;
+        }
+    }
 }
 
 void UCI::loop()
@@ -398,6 +448,7 @@ void UCI::loop()
             std::cout << "id author Sandeep Poudel\n";
             std::cout << "option name UCI_LimitStrength type check default false\n";
             std::cout << "option name UCI_Elo type spin default 1400 min 100 max 4000\n";
+            std::cout << "option name Ponder type check default false\n";
              if (!OpeningBook::isLoaded())
                 OpeningBook::load("book.txt");
 
@@ -440,14 +491,15 @@ void UCI::loop()
             handleGo(command);
         }
 
-        else if (command == "stop")
+        else if (command == "ponderhit")
         {
-           
+           handlePonderHit();
         }
 
         else if (command == "quit")
         {
-            break;
+            stopSearchAndWait();
+            return;
         }
     }
 }
