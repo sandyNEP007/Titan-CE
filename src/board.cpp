@@ -282,22 +282,10 @@ bool Board::isValidMove(const Move& move)
 
     bool pieceMoveValid = false;
 
-    if (sourcePiece == 'P' || sourcePiece == 'p')
-        pieceMoveValid = isValidPawnMove(move);
+   
 
-    else if (sourcePiece == 'N' || sourcePiece == 'n')
-        pieceMoveValid = isValidKnightMove(move);
 
-    else if (sourcePiece == 'B' || sourcePiece == 'b')
-        pieceMoveValid = isValidBishopMove(move);
-
-    else if (sourcePiece == 'R' || sourcePiece == 'r')
-        pieceMoveValid = isValidRookMove(move);
-
-    else if (sourcePiece == 'Q' || sourcePiece == 'q')
-        pieceMoveValid = isValidQueenMove(move);
-
-    else if (sourcePiece == 'K' || sourcePiece == 'k')
+if (sourcePiece == 'K' || sourcePiece == 'k')
 {
 
     // Castling attempt: king moves exactly two files
@@ -306,10 +294,7 @@ bool Board::isValidMove(const Move& move)
     {
         pieceMoveValid = isValidCastle(move);
     }
-    else
-    {
-        pieceMoveValid = isValidKingMove(move);
-    }
+   
 }
 
     else
@@ -340,288 +325,19 @@ return true;
 }
 
 
-bool Board :: isValidPawnMove(const Move& move)
-{
-     char piece = board[move.fromRow][move.fromCol];
-     char destPiece = board[move.toRow][move.toCol];
-     //for white pawn
-     if(piece == 'P')
-{
-     if (move.fromRow == 6 &&        //two square move
-         move.toRow == 4 &&
-         move.toCol == move.fromCol)
-        {
-            if (destPiece != '.')
-                return false;
-
-            if (board[move.fromRow - 1][move.fromCol] != '.')
-                return false;
-
-            return true;
-        }
-
-         // One-square move
-        if (move.toRow == move.fromRow - 1 &&
-            move.toCol == move.fromCol)
-        {
-            if (destPiece != '.')
-                return false;
-
-            return true;
-        }
-
-         // White diagonal capture
-         if (move.toRow == move.fromRow - 1 &&
-            (move.toCol == move.fromCol - 1 ||
-            move.toCol == move.fromCol + 1))
-         {
-         if (isBlackPiece(destPiece))
-         {
-            return true;
-         }
-
-           return false;
-    
-        }
-        //En-passant
-        if (move.toRow == move.fromRow - 1 &&
-           (move.toCol == move.fromCol - 1 ||
-            move.toCol == move.fromCol + 1))
-{
-    if (destPiece == '.')
-    {
-        if (lastMove.fromRow == 1 &&
-            lastMove.toRow == 3 &&
-            lastMove.toCol == move.toCol)
-        {
-            if (board[move.fromRow][move.toCol] == 'p')
-            {
-                return true;
-            }
-        }
-    }
-}
-    
-}
-
-if(piece=='p')
-{
-         // Two-square move
-        if (move.fromRow == 1 &&
-            move.toRow == 3 &&
-            move.toCol == move.fromCol)
-        {
-            if (destPiece != '.')
-                return false;
-
-            if (board[move.fromRow + 1][move.fromCol] != '.')
-                return false;
-
-            return true;
-        }
-
-        // One-square move
-        if (move.toRow == move.fromRow + 1 &&
-            move.toCol == move.fromCol)
-        {
-            if (destPiece != '.')
-                return false;
-
-            return true;
-        }
-        // Black diagonal capture
-       if (move.toRow == move.fromRow + 1 &&
-          (move.toCol == move.fromCol - 1 ||
-          move.toCol == move.fromCol + 1))
-        {
-            if (isWhitePiece(destPiece))
-            {
-               return true;
-            }
-
-          return false;
-         }
-          //En-passant
-          if (move.toRow == move.fromRow + 1 &&
-    (move.toCol == move.fromCol - 1 ||
-     move.toCol == move.fromCol + 1))
-{
-    if (destPiece == '.')
-    {
-        if (lastMove.fromRow == 6 &&
-            lastMove.toRow == 4 &&
-            lastMove.toCol == move.toCol)
-        {
-            if (board[move.fromRow][move.toCol] == 'P')
-            {
-                return true;
-            }
-        }
-    }
-}
-
-}
-  return false; 
-}
-
-bool Board::isValidBishopMove(const Move& move){
-    int rowDifference = abs(move.toRow - move.fromRow);
-    int colDifference = abs(move.toCol - move.fromCol);
-      if (rowDifference != colDifference)
-           {
-               return false;
-           }
-
-    int rowStep = (move.toRow > move.fromRow) ? 1 : -1;
-    int colStep = (move.toCol > move.fromCol) ? 1 : -1;
-    int currentRow = move.fromRow + rowStep;
-    int currentCol = move.fromCol + colStep;
-while (currentRow != move.toRow)
-{
-    if (board[currentRow][currentCol] != '.')
-    {
-        return false;
-    }
-
-    currentRow += rowStep;
-    currentCol += colStep;
-}
-
-return true;
-}
-
-bool Board::isValidKnightMove(const Move& move)
-{
-    int rowDifference = abs(move.toRow - move.fromRow);
-    int colDifference = abs(move.toCol - move.fromCol);
-
-    if ((rowDifference == 2 && colDifference == 1) ||
-        (rowDifference == 1 && colDifference == 2))
-    {
-        return true;
-    }
-
-    return false;
-}
-
-bool Board::isValidRookMove(const Move& move){
-    if (move.fromRow != move.toRow &&
-        move.fromCol != move.toCol)
-    {
-        return false;
-    }
-
-    int rowStep = 0;
-    int colStep = 0;
-
-    if (move.toRow > move.fromRow)
-        rowStep = 1;
-    else if (move.toRow < move.fromRow)
-        rowStep = -1;
-
-    if (move.toCol > move.fromCol)
-        colStep = 1;
-    else if (move.toCol < move.fromCol)
-        colStep = -1;
-
-    int currentRow = move.fromRow + rowStep;
-    int currentCol = move.fromCol + colStep;
-    while (currentRow != move.toRow ||
-       currentCol != move.toCol)
-{
-    if (board[currentRow][currentCol] != '.')
-    {
-        return false;
-    }
-
-    currentRow += rowStep;
-    currentCol += colStep;
-}
-
-return true;
-}
-
-bool Board::isValidQueenMove(const Move& move)
-{
-    if (isValidBishopMove(move))
-    {
-        return true;
-    }
-
-    if (isValidRookMove(move))
-    {
-        return true;
-    }
-
-    return false;
-}
-
-bool Board::isValidKingMove(const Move& move)
-{
-    char piece = board[move.fromRow][move.fromCol];
-    char destPiece = board[move.toRow][move.toCol];
-
-    if (abs(move.toCol - move.fromCol) == 2)
-        {
-           return isValidCastle(move);
-        }
-
-    if (piece != 'K' && piece != 'k')
-        {
-           return false;
-        }
-
-    
-    if (abs(move.toRow - move.fromRow) > 1 ||
-        abs(move.toCol - move.fromCol) > 1)
-    {
-        return false;
-    }
-
-    // Cannot capture own piece
-    if (isWhitePiece(piece) && isWhitePiece(destPiece))
-    {
-        return false;
-    }
-
-    if (isBlackPiece(piece) && isBlackPiece(destPiece))
-    {
-        return false;
-    }
-
-    bool white = (piece == 'K');
-
-    // Check destination square
-    if (isSquareAttacked(move.toRow, move.toCol, !white))
-    {
-        return false;
-    }
-
-    return true;
-}
 
 bool Board::isKingInCheck(bool white)
 {
-    char king = white ? 'K' : 'k';
+    uint64_t kingBB = pieceBB[white ? WK : BK];
 
-    int kingRow = -1;
-    int kingCol = -1;
+    if (kingBB == 0)
+        return false;
 
-    // Find king
-    for (int row = 0; row < 8; row++)
-    {
-        for (int col = 0; col < 8; col++)
-        {
-            if (board[row][col] == king)
-            {
-                kingRow = row;
-                kingCol = col;
-                break;
-            }
-        }
-    }
+    int kingSquare = __builtin_ctzll(kingBB);
 
-    // Opposite color attacks this king
+    int kingRow = kingSquare / 8;
+    int kingCol = kingSquare % 8;
+
     return isSquareAttacked(kingRow, kingCol, !white);
 }
 

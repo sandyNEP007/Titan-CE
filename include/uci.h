@@ -5,11 +5,18 @@
 #include "move.h"
 
 #include <string>
+#include <thread>
+#include <atomic>
 
 class UCI
 {
 private:
     static Board board;
+    static bool ponderEnabled;
+    static std::thread searchThread;
+    static std::atomic<bool> searchRunning;
+    static void stopSearchAndWait();
+    static void handlePonderHit();
 
     static void printMove(const Move& move);
 

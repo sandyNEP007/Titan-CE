@@ -177,7 +177,7 @@ Move MovePicker::nextMove()
 
             case DONE:
             default:
-                return Move();   // sentinel: fromRow == -1, no more moves
+                return Move(); 
         }
     }
 }

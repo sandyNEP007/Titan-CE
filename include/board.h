@@ -100,12 +100,6 @@ bool hasBlackCastled() const
     bool isWhitePiece(char piece);
     bool isBlackPiece(char piece);
     bool isValidMove(const Move& move);
-    bool isValidPawnMove(const Move& move);
-    bool isValidBishopMove(const Move& move);
-    bool isValidKnightMove(const Move& move);
-    bool isValidRookMove(const Move& move);
-    bool isValidQueenMove(const Move& move);
-    bool isValidKingMove(const Move& move);
     bool isValidCastle(const Move& move);
     bool isKingInCheck(bool white);
     bool isSquareAttacked(int row, int col, bool byWhite);

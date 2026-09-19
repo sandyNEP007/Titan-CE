@@ -17,7 +17,8 @@ long long EngineSearch::depth = 0;
 long long EngineSearch::nps = 0;
 long long EngineSearch::nodes = 0;
 std::chrono::steady_clock::time_point EngineSearch::searchDeadline{};
-bool EngineSearch::stopSearch = false;
+std::atomic<bool> EngineSearch::stopSearch{false};
+std::atomic<bool> EngineSearch::ponderHitRequested{false};
 
 bool EngineSearch::checkTimeUp()
 {
@@ -46,7 +47,7 @@ bool EngineSearch::hasTimeForNextDepth(
     return predictedNextDepthMs < remainingMs;
 }
 
-// ---- Static Exchange Evaluation helpers ----
+//  Static Exchange Evaluation helpers 
 // File-local helper: finds the cheapest attacker of `white`'s color that
 // can capture on (targetRow, targetCol) within the given occupancy grid.
 // Not a class member — only ever used inside EngineSearch::see.
@@ -609,17 +610,36 @@ int EngineSearch::quiescence(Board& board, int alpha, int beta, int checkPly)
     return alpha;
 }
 
-Move EngineSearch::findBestMove(Board& board, int maxdepth, long long timeLimitMs)
+void EngineSearch::requestStop()
 {
+    stopSearch.store(true);
+}
+
+void EngineSearch::ponderHit()
+{
+    ponderHitRequested.store(true);
+}
+
+
+Move EngineSearch::findBestMove(Board& board, int maxdepth, long long timeLimitMs, bool ponder)
+{
+    stopSearch.store(false);
     auto searchStart = std::chrono::steady_clock::now();
 
     stopSearch = false;
 
-    if (timeLimitMs > 0)
-        searchDeadline = searchStart + std::chrono::milliseconds(timeLimitMs);
-    else
-        searchDeadline = std::chrono::steady_clock::time_point{};
-
+    if (ponder)
+{
+    searchDeadline = std::chrono::steady_clock::time_point{};
+}
+else if (timeLimitMs > 0)
+{
+    searchDeadline = searchStart + std::chrono::milliseconds(timeLimitMs);
+}
+else
+{
+    searchDeadline = std::chrono::steady_clock::time_point{};
+}
     nodes = 0;
     cutoffs = 0;
     ttHits = 0;
@@ -643,7 +663,7 @@ Move EngineSearch::findBestMove(Board& board, int maxdepth, long long timeLimitM
 
     for (int depth = 1; depth <= maxdepth; depth++)
     {
-     std::cout << "Searching depth " << depth << "..." << std::endl;
+    
      
 
         if (depth > 1 &&
@@ -656,7 +676,7 @@ Move EngineSearch::findBestMove(Board& board, int maxdepth, long long timeLimitM
 
             std::vector<Move> legalMoves = MoveGenerator::generateLegalMoves(board);
 
-        int currentBestScore = -1000000;
+        int currentBestScore = -1000000;  
         Move currentBestMove;
 
         int alpha;
@@ -764,18 +784,6 @@ Move EngineSearch::findBestMove(Board& board, int maxdepth, long long timeLimitM
     if (totalMs < 1) totalMs = 1;
 
     unsigned long long nps = ((unsigned long long)nodes * 1000) / (unsigned long long)totalMs;
-    char fromFile = 'a' + bestMove.fromCol;
-    char fromRank = '8' - bestMove.fromRow;
-
-    char toFile = 'a' + bestMove.toCol;
-    char toRank = '8' - bestMove.toRow;
-
-    std::cout << fromFile << fromRank
-              << toFile << toRank<<std::endl;
-
-    std::cout <<  " nodes " << nodes<<std::endl;
-    std::cout << " nps " << nps << std::endl;
-    std::cout << " cutoffs " << cutoffs << std::endl;
 
   
     return bestMove;
