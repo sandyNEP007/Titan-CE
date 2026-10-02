@@ -8,7 +8,7 @@ This project is being developed step by step to understand the internal architec
 
 # Current Version
 
-**1.0.0**
+**2.0**
 
 ---
 
@@ -16,31 +16,31 @@ This project is being developed step by step to understand the internal architec
 
 ## Search Engine
 
-* ✅ Negamax Search
-* ✅ Alpha-Beta Pruning
-* ✅ Root Move Analysis
-* ✅ Best Move Selection
+* Negamax Search
+* Alpha-Beta Pruning
+* Root Move Analysis
+* Best Move Selection
 
 ## Position Management
 
-* ✅ Zobrist Hashing
-* ✅ Transposition Table
-* ✅ TT Store
-* ✅ TT Hit
+* Zobrist Hashing
+* Transposition Table
+* TT Store
+* TT Hit
 
 ## Board Management
 
-* ✅ 8×8 Board Representation
-* ✅ Move Generation
-* ✅ Make Move
-* ✅ Undo Move
-* ✅ Castling Support
-* ✅ Pawn Promotion
+* 8×8 Board Representation
+* Move Generation
+* Make Move
+* Undo Move
+* Castling Support
+* Pawn Promotion
 
 ## Evaluation
 
-* ✅ Material Evaluation
-* ✅ Position Evaluation 
+* Material Evaluation
+* Position Evaluation 
 
 ---
 
